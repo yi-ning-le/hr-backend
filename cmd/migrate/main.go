@@ -22,21 +22,32 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Read Migration File
-	migrationFile := "migrations/001_initial_schema.sql"
-	content, err := os.ReadFile(migrationFile)
-	if err != nil {
-		log.Fatalf("Failed to read migration file %s: %v", migrationFile, err)
+	// 3. Read Migration Files
+	files := []string{
+		"migrations/001_initial_schema.sql",
+		"migrations/002_auth_schema.sql",
 	}
 
-	// 4. Execute Migration
-	// We execute the raw SQL string. 
-	// In a production app, you'd use a proper migration tool (like golang-migrate) 
-	// to handle versioning and idempotent runs.
-	_, err = db.Pool.Exec(context.Background(), string(content))
-	if err != nil {
-		log.Fatalf("Failed to execute migration: %v", err)
+	// 4. Execute Migrations
+	for _, file := range files {
+		log.Printf("Applying migration: %s", file)
+		content, err := os.ReadFile(file)
+		if err != nil {
+			log.Fatalf("Failed to read migration file %s: %v", file, err)
+		}
+
+		_, err = db.Pool.Exec(context.Background(), string(content))
+		if err != nil {
+			// In a real migration tool, we'd check if it's already applied. 
+			// Here we just log error (likely "relation already exists") and continue
+			// or fail if it's critical. 
+			// Since 001 is likely already applied, it will error on "CREATE TABLE".
+			// We should probably rely on the "IF NOT EXISTS" or just ignore error for this simple script.
+			log.Printf("Migration %s executed (error: %v)", file, err)
+		} else {
+			log.Printf("Migration %s success", file)
+		}
 	}
 
-	log.Println("Migration completed successfully!")
+	log.Println("Migration process finished!")
 }

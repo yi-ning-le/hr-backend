@@ -13,10 +13,13 @@ import (
 type Querier interface {
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
+	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteCandidate(ctx context.Context, id pgtype.UUID) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
+	GetUserByUsername(ctx context.Context, username string) (User, error)
 	ListCandidates(ctx context.Context, dollar_1 pgtype.UUID) ([]ListCandidatesRow, error)
 	ListJobs(ctx context.Context) ([]Job, error)
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)

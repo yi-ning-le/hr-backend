@@ -22,6 +22,10 @@ type MockQuerier struct {
 	UpdateCandidateNoteFunc   func(ctx context.Context, arg repository.UpdateCandidateNoteParams) (repository.Candidate, error)
 	UpdateCandidateResumeFunc func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error)
 	DeleteCandidateFunc       func(ctx context.Context, id pgtype.UUID) error
+
+	CreateUserFunc        func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error)
+	GetUserByUsernameFunc func(ctx context.Context, username string) (repository.User, error)
+	GetUserByIDFunc       func(ctx context.Context, id pgtype.UUID) (repository.User, error)
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -66,4 +70,14 @@ func (m *MockQuerier) UpdateCandidateResume(ctx context.Context, arg repository.
 }
 func (m *MockQuerier) DeleteCandidate(ctx context.Context, id pgtype.UUID) error {
 	return m.DeleteCandidateFunc(ctx, id)
+}
+
+func (m *MockQuerier) CreateUser(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+	return m.CreateUserFunc(ctx, arg)
+}
+func (m *MockQuerier) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
+	return m.GetUserByUsernameFunc(ctx, username)
+}
+func (m *MockQuerier) GetUserByID(ctx context.Context, id pgtype.UUID) (repository.User, error) {
+	return m.GetUserByIDFunc(ctx, id)
 }

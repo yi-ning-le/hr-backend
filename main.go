@@ -32,10 +32,12 @@ func main() {
 	// 4. Initialize Services
 	jobService := service.NewJobService(repo)
 	candidateService := service.NewCandidateService(repo)
+	authService := service.NewAuthService(repo, cfg.JWTSecret)
 
 	// 5. Initialize Handlers
 	jobHandler := handler.NewJobHandler(jobService)
 	candidateHandler := handler.NewCandidateHandler(candidateService)
+	authHandler := handler.NewAuthHandler(authService)
 
 	// 6. Setup Router
 	r := gin.Default()
@@ -46,32 +48,37 @@ func main() {
 	// Static File Serving
 	r.Static("/static/resumes", "./uploads")
 
-	// Routes
-	// We'll group them under /api if we want to match the spec's likely intention,
-	// or directly at root if the frontend proxy handles path rewriting.
-	// Given the spec says server url is .../api, and paths are /jobs, 
-	// usually this means GET .../api/jobs.
-	api := r.Group("/") // Change to "/api" if needed, but often proxies strip prefix.
-	// Actually, let's just support both or stick to root for simplicity unless requested otherwise.
-	// User didn't specify prefix handling. I'll stick to root based on paths.
-	// Wait, if I use root, then `http://localhost:8080/jobs` matches.
+	// --- Routes ---
 	
-	// Job Routes
-	api.GET("/jobs", jobHandler.ListJobs)
-	api.POST("/jobs", jobHandler.CreateJob)
-	api.PUT("/jobs/:id", jobHandler.UpdateJob)
-	api.DELETE("/jobs/:id", jobHandler.DeleteJob)
-	api.PATCH("/jobs/:id/status", jobHandler.ToggleStatus)
+	// Public Routes
+	auth := r.Group("/auth")
+	{
+		auth.POST("/register", authHandler.Register)
+		auth.POST("/login", authHandler.Login)
+		auth.POST("/logout", authHandler.Logout)
+	}
 
-	// Candidate Routes
-	api.GET("/candidates", candidateHandler.ListCandidates)
-	api.POST("/candidates", candidateHandler.CreateCandidate)
-	api.GET("/candidates/:id", candidateHandler.GetCandidate)
-	api.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
-	api.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
-	api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
-	api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
-	api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
+	// Protected Routes (API)
+	api := r.Group("/")
+	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	{
+		// Job Routes
+		api.GET("/jobs", jobHandler.ListJobs)
+		api.POST("/jobs", jobHandler.CreateJob)
+		api.PUT("/jobs/:id", jobHandler.UpdateJob)
+		api.DELETE("/jobs/:id", jobHandler.DeleteJob)
+		api.PATCH("/jobs/:id/status", jobHandler.ToggleStatus)
+
+		// Candidate Routes
+		api.GET("/candidates", candidateHandler.ListCandidates)
+		api.POST("/candidates", candidateHandler.CreateCandidate)
+		api.GET("/candidates/:id", candidateHandler.GetCandidate)
+		api.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
+		api.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
+		api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
+		api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
+		api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
+	}
 
 	// Health Check
 	r.GET("/health", func(c *gin.Context) {

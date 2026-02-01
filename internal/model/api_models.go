@@ -59,3 +59,29 @@ type CandidateInput struct {
 	Note            string    `json:"note"`
 	AppliedAt       time.Time `json:"appliedAt" binding:"required"`
 }
+
+// --- Auth Models ---
+
+type LoginInput struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
+
+type RegisterInput struct {
+	Username string `json:"username" binding:"required,min=3,max=20,alphanum"`
+	Email    string `json:"email" binding:"required,email"`
+	Password string `json:"password" binding:"required,min=6,max=50"`
+}
+
+type User struct {
+	ID        string    `json:"id"`
+	Username  string    `json:"username"`
+	Email     string    `json:"email"`
+	Avatar    string    `json:"avatar,omitempty"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
+type AuthResponse struct {
+	Token string `json:"token"`
+	User  User   `json:"user"`
+}
