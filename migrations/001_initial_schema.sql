@@ -1,7 +1,7 @@
 -- Enable pgcrypto for UUID generation
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
-CREATE TABLE jobs (
+CREATE TABLE IF NOT EXISTS jobs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     title VARCHAR(255) NOT NULL,
     department VARCHAR(255) NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE jobs (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE candidates (
+CREATE TABLE IF NOT EXISTS candidates (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     avatar VARCHAR(255),
@@ -33,5 +33,5 @@ CREATE TABLE candidates (
 );
 
 -- Indexes for performance
-CREATE INDEX idx_candidates_applied_job_id ON candidates(applied_job_id);
-CREATE INDEX idx_jobs_status ON jobs(status);
+CREATE INDEX IF NOT EXISTS idx_candidates_applied_job_id ON candidates(applied_job_id);
+CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);

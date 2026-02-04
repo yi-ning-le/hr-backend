@@ -48,3 +48,21 @@ type User struct {
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
 }
+
+type Employee struct {
+	ID             pgtype.UUID        `json:"id"`
+	FirstName      string             `json:"first_name"`
+	LastName       string             `json:"last_name"`
+	Email          string             `json:"email"`
+	Phone          string             `json:"phone"`
+	Department     string             `json:"department"`
+	Position       string             `json:"position"`
+	Status         string             `json:"status"`
+	EmploymentType string             `json:"employment_type"`
+	JoinDate       pgtype.Timestamptz `json:"join_date"`
+	ManagerID      pgtype.UUID        `json:"manager_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+

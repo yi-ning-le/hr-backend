@@ -85,3 +85,41 @@ type AuthResponse struct {
 	Token string `json:"token"`
 	User  User   `json:"user"`
 }
+
+// --- Employee Models ---
+
+type Employee struct {
+	ID             string    `json:"id"`
+	FirstName      string    `json:"firstName"`
+	LastName       string    `json:"lastName"`
+	Email          string    `json:"email"`
+	Phone          string    `json:"phone"`
+	Department     string    `json:"department"`
+	Position       string    `json:"position"`
+	Status         string    `json:"status"`
+	EmploymentType string    `json:"employmentType"`
+	JoinDate       time.Time `json:"joinDate"`
+	ManagerID      string    `json:"managerId,omitempty"`
+	UserID         string    `json:"userId,omitempty"`
+}
+
+type EmployeeInput struct {
+	FirstName      string    `json:"firstName" binding:"required"`
+	LastName       string    `json:"lastName" binding:"required"`
+	Email          string    `json:"email" binding:"required,email"`
+	Phone          string    `json:"phone" binding:"required"`
+	Department     string    `json:"department" binding:"required"`
+	Position       string    `json:"position" binding:"required"`
+	Status         string    `json:"status"`
+	EmploymentType string    `json:"employmentType"`
+	JoinDate       time.Time `json:"joinDate" binding:"required"`
+	ManagerID      string    `json:"managerId"`
+	UserID         string    `json:"userId"`
+}
+
+type EmployeeListResult struct {
+	Employees []Employee `json:"employees"`
+	Total     int64      `json:"total"`
+	Page      int        `json:"page"`
+	Limit     int        `json:"limit"`
+}

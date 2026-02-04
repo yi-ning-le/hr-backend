@@ -28,6 +28,13 @@ type Querier interface {
 	UpdateCandidateStatus(ctx context.Context, arg UpdateCandidateStatusParams) (Candidate, error)
 	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
 	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)
+	// Employee methods
+	CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error)
+	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
+	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
+	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
+	UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error)
+	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 }
 
 var _ Querier = (*Queries)(nil)

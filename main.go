@@ -33,11 +33,13 @@ func main() {
 	jobService := service.NewJobService(repo)
 	candidateService := service.NewCandidateService(repo)
 	authService := service.NewAuthService(repo, cfg.JWTSecret)
+	employeeService := service.NewEmployeeService(repo)
 
 	// 5. Initialize Handlers
 	jobHandler := handler.NewJobHandler(jobService)
 	candidateHandler := handler.NewCandidateHandler(candidateService)
 	authHandler := handler.NewAuthHandler(authService)
+	employeeHandler := handler.NewEmployeeHandler(employeeService)
 
 	// 6. Setup Router
 	r := gin.Default()
@@ -49,7 +51,7 @@ func main() {
 	r.Static("/static/resumes", "./uploads")
 
 	// --- Routes ---
-	
+
 	// Public Routes
 	auth := r.Group("/auth")
 	{
@@ -78,6 +80,13 @@ func main() {
 		api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
 		api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
 		api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
+
+		// Employee Routes
+		api.GET("/employees", employeeHandler.ListEmployees)
+		api.POST("/employees", employeeHandler.CreateEmployee)
+		api.GET("/employees/:id", employeeHandler.GetEmployee)
+		api.PUT("/employees/:id", employeeHandler.UpdateEmployee)
+		api.DELETE("/employees/:id", employeeHandler.DeleteEmployee)
 	}
 
 	// Health Check

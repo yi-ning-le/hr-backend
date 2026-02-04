@@ -3,16 +3,17 @@ package mocks
 import (
 	"context"
 	"hr-backend/internal/repository"
+
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type MockQuerier struct {
-	CreateJobFunc             func(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error)
-	GetJobFunc                func(ctx context.Context, id pgtype.UUID) (repository.Job, error)
-	ListJobsFunc              func(ctx context.Context) ([]repository.Job, error)
-	UpdateJobFunc             func(ctx context.Context, arg repository.UpdateJobParams) (repository.Job, error)
-	UpdateJobStatusFunc       func(ctx context.Context, arg repository.UpdateJobStatusParams) (repository.Job, error)
-	DeleteJobFunc             func(ctx context.Context, id pgtype.UUID) error
+	CreateJobFunc       func(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error)
+	GetJobFunc          func(ctx context.Context, id pgtype.UUID) (repository.Job, error)
+	ListJobsFunc        func(ctx context.Context) ([]repository.Job, error)
+	UpdateJobFunc       func(ctx context.Context, arg repository.UpdateJobParams) (repository.Job, error)
+	UpdateJobStatusFunc func(ctx context.Context, arg repository.UpdateJobStatusParams) (repository.Job, error)
+	DeleteJobFunc       func(ctx context.Context, id pgtype.UUID) error
 
 	CreateCandidateFunc       func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error)
 	GetCandidateFunc          func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error)
@@ -26,6 +27,14 @@ type MockQuerier struct {
 	CreateUserFunc        func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error)
 	GetUserByUsernameFunc func(ctx context.Context, username string) (repository.User, error)
 	GetUserByIDFunc       func(ctx context.Context, id pgtype.UUID) (repository.User, error)
+
+	// Employee mock functions
+	CreateEmployeeFunc func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error)
+	GetEmployeeFunc    func(ctx context.Context, id pgtype.UUID) (repository.Employee, error)
+	ListEmployeesFunc  func(ctx context.Context, arg repository.ListEmployeesParams) ([]repository.Employee, error)
+	CountEmployeesFunc func(ctx context.Context, arg repository.CountEmployeesParams) (int64, error)
+	UpdateEmployeeFunc func(ctx context.Context, arg repository.UpdateEmployeeParams) (repository.Employee, error)
+	DeleteEmployeeFunc func(ctx context.Context, id pgtype.UUID) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -80,4 +89,42 @@ func (m *MockQuerier) GetUserByUsername(ctx context.Context, username string) (r
 }
 func (m *MockQuerier) GetUserByID(ctx context.Context, id pgtype.UUID) (repository.User, error) {
 	return m.GetUserByIDFunc(ctx, id)
+}
+
+// Employee methods
+func (m *MockQuerier) CreateEmployee(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
+	if m.CreateEmployeeFunc != nil {
+		return m.CreateEmployeeFunc(ctx, arg)
+	}
+	return repository.Employee{}, nil
+}
+func (m *MockQuerier) GetEmployee(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+	if m.GetEmployeeFunc != nil {
+		return m.GetEmployeeFunc(ctx, id)
+	}
+	return repository.Employee{}, nil
+}
+func (m *MockQuerier) ListEmployees(ctx context.Context, arg repository.ListEmployeesParams) ([]repository.Employee, error) {
+	if m.ListEmployeesFunc != nil {
+		return m.ListEmployeesFunc(ctx, arg)
+	}
+	return nil, nil
+}
+func (m *MockQuerier) CountEmployees(ctx context.Context, arg repository.CountEmployeesParams) (int64, error) {
+	if m.CountEmployeesFunc != nil {
+		return m.CountEmployeesFunc(ctx, arg)
+	}
+	return 0, nil
+}
+func (m *MockQuerier) UpdateEmployee(ctx context.Context, arg repository.UpdateEmployeeParams) (repository.Employee, error) {
+	if m.UpdateEmployeeFunc != nil {
+		return m.UpdateEmployeeFunc(ctx, arg)
+	}
+	return repository.Employee{}, nil
+}
+func (m *MockQuerier) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
+	if m.DeleteEmployeeFunc != nil {
+		return m.DeleteEmployeeFunc(ctx, id)
+	}
+	return nil
 }

@@ -22,30 +22,76 @@ func main() {
 	}
 	defer db.Close()
 
-	// 3. Read Migration Files
-	files := []string{
-		"migrations/001_initial_schema.sql",
-		"migrations/002_auth_schema.sql",
+	ctx := context.Background()
+
+	// 3. Create migrations table if not exists
+	_, err = db.Pool.Exec(ctx, `
+		CREATE TABLE IF NOT EXISTS schema_migrations (
+			version TEXT PRIMARY KEY,
+			applied_at TIMESTAMPTZ DEFAULT NOW()
+		);
+	`)
+	if err != nil {
+		log.Fatalf("Failed to create migrations table: %v", err)
 	}
 
-	// 4. Execute Migrations
-	for _, file := range files {
-		log.Printf("Applying migration: %s", file)
-		content, err := os.ReadFile(file)
-		if err != nil {
-			log.Fatalf("Failed to read migration file %s: %v", file, err)
-		}
+	// 4. Get applied migrations
+	rows, err := db.Pool.Query(ctx, "SELECT version FROM schema_migrations")
+	if err != nil {
+		log.Fatalf("Failed to query applied migrations: %v", err)
+	}
+	defer rows.Close()
 
-		_, err = db.Pool.Exec(context.Background(), string(content))
-		if err != nil {
-			// In a real migration tool, we'd check if it's already applied. 
-			// Here we just log error (likely "relation already exists") and continue
-			// or fail if it's critical. 
-			// Since 001 is likely already applied, it will error on "CREATE TABLE".
-			// We should probably rely on the "IF NOT EXISTS" or just ignore error for this simple script.
-			log.Printf("Migration %s executed (error: %v)", file, err)
-		} else {
-			log.Printf("Migration %s success", file)
+	applied := make(map[string]bool)
+	for rows.Next() {
+		var v string
+		if err := rows.Scan(&v); err != nil {
+			log.Fatalf("Failed to scan migration version: %v", err)
+		}
+		applied[v] = true
+	}
+
+	// 5. Read migration directory
+	entries, err := os.ReadDir("migrations")
+	if err != nil {
+		log.Fatalf("Failed to read migrations directory: %v", err)
+	}
+
+	for _, entry := range entries {
+		if !entry.IsDir() && entry.Name()[len(entry.Name())-4:] == ".sql" {
+			version := entry.Name()
+			if !applied[version] {
+				log.Printf("Applying migration: %s", version)
+				content, err := os.ReadFile("migrations/" + version)
+				if err != nil {
+					log.Fatalf("Failed to read migration file %s: %v", version, err)
+				}
+
+				// Execute migration in transaction
+				tx, err := db.Pool.Begin(ctx)
+				if err != nil {
+					log.Fatalf("Failed to start transaction for %s: %v", version, err)
+				}
+
+				_, err = tx.Exec(ctx, string(content))
+				if err != nil {
+					tx.Rollback(ctx)
+					log.Fatalf("Failed to execute migration %s: %v", version, err)
+				}
+
+				_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version)
+				if err != nil {
+					tx.Rollback(ctx)
+					log.Fatalf("Failed to record migration %s: %v", version, err)
+				}
+
+				if err := tx.Commit(ctx); err != nil {
+					log.Fatalf("Failed to commit migration %s: %v", version, err)
+				}
+				log.Printf("Migration %s success", version)
+			} else {
+				log.Printf("Migration %s already applied, skipping", version)
+			}
 		}
 	}
 

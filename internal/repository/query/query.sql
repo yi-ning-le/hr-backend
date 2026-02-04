@@ -112,3 +112,52 @@ SELECT * FROM users WHERE username = $1 LIMIT 1;
 
 -- name: GetUserByID :one
 SELECT * FROM users WHERE id = $1 LIMIT 1;
+
+-- Employee queries
+
+-- name: CreateEmployee :one
+INSERT INTO employees (
+  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id
+) VALUES (
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+)
+RETURNING *;
+
+-- name: GetEmployee :one
+SELECT * FROM employees
+WHERE id = $1 LIMIT 1;
+
+-- name: ListEmployees :many
+SELECT * FROM employees
+WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
+  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
+  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
+ORDER BY created_at DESC
+LIMIT $4 OFFSET $5;
+
+-- name: CountEmployees :one
+SELECT COUNT(*) FROM employees
+WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
+  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
+  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%');
+
+-- name: UpdateEmployee :one
+UPDATE employees
+SET first_name = $2,
+    last_name = $3,
+    email = $4,
+    phone = $5,
+    department = $6,
+    position = $7,
+    status = $8,
+    employment_type = $9,
+    join_date = $10,
+    manager_id = $11,
+    user_id = $12,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- name: DeleteEmployee :exec
+DELETE FROM employees
+WHERE id = $1;
