@@ -51,7 +51,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// For stateless JWT, we just return success. 
+	// For stateless JWT, we just return success.
 	// The client will delete the token.
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }

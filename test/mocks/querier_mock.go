@@ -35,6 +35,15 @@ type MockQuerier struct {
 	CountEmployeesFunc func(ctx context.Context, arg repository.CountEmployeesParams) (int64, error)
 	UpdateEmployeeFunc func(ctx context.Context, arg repository.UpdateEmployeeParams) (repository.Employee, error)
 	DeleteEmployeeFunc func(ctx context.Context, id pgtype.UUID) error
+
+	// Candidate Status mock functions
+	ListCandidateStatusesFunc       func(ctx context.Context) ([]repository.CandidateStatus, error)
+	GetCandidateStatusFunc          func(ctx context.Context, id pgtype.UUID) (repository.CandidateStatus, error)
+	GetCandidateStatusBySlugFunc    func(ctx context.Context, slug string) (repository.CandidateStatus, error)
+	CreateCandidateStatusFunc       func(ctx context.Context, arg repository.CreateCandidateStatusParams) (repository.CandidateStatus, error)
+	UpdateCandidateStatusFieldsFunc func(ctx context.Context, arg repository.UpdateCandidateStatusFieldsParams) (repository.CandidateStatus, error)
+	UpdateCandidateStatusOrderFunc  func(ctx context.Context, arg repository.UpdateCandidateStatusOrderParams) error
+	DeleteCandidateStatusFunc       func(ctx context.Context, id pgtype.UUID) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -125,6 +134,50 @@ func (m *MockQuerier) UpdateEmployee(ctx context.Context, arg repository.UpdateE
 func (m *MockQuerier) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
 	if m.DeleteEmployeeFunc != nil {
 		return m.DeleteEmployeeFunc(ctx, id)
+	}
+	return nil
+}
+
+// Candidate Status methods
+func (m *MockQuerier) ListCandidateStatuses(ctx context.Context) ([]repository.CandidateStatus, error) {
+	if m.ListCandidateStatusesFunc != nil {
+		return m.ListCandidateStatusesFunc(ctx)
+	}
+	return nil, nil
+}
+func (m *MockQuerier) GetCandidateStatus(ctx context.Context, id pgtype.UUID) (repository.CandidateStatus, error) {
+	if m.GetCandidateStatusFunc != nil {
+		return m.GetCandidateStatusFunc(ctx, id)
+	}
+	return repository.CandidateStatus{}, nil
+}
+func (m *MockQuerier) GetCandidateStatusBySlug(ctx context.Context, slug string) (repository.CandidateStatus, error) {
+	if m.GetCandidateStatusBySlugFunc != nil {
+		return m.GetCandidateStatusBySlugFunc(ctx, slug)
+	}
+	return repository.CandidateStatus{}, nil
+}
+func (m *MockQuerier) CreateCandidateStatus(ctx context.Context, arg repository.CreateCandidateStatusParams) (repository.CandidateStatus, error) {
+	if m.CreateCandidateStatusFunc != nil {
+		return m.CreateCandidateStatusFunc(ctx, arg)
+	}
+	return repository.CandidateStatus{}, nil
+}
+func (m *MockQuerier) UpdateCandidateStatusFields(ctx context.Context, arg repository.UpdateCandidateStatusFieldsParams) (repository.CandidateStatus, error) {
+	if m.UpdateCandidateStatusFieldsFunc != nil {
+		return m.UpdateCandidateStatusFieldsFunc(ctx, arg)
+	}
+	return repository.CandidateStatus{}, nil
+}
+func (m *MockQuerier) UpdateCandidateStatusOrder(ctx context.Context, arg repository.UpdateCandidateStatusOrderParams) error {
+	if m.UpdateCandidateStatusOrderFunc != nil {
+		return m.UpdateCandidateStatusOrderFunc(ctx, arg)
+	}
+	return nil
+}
+func (m *MockQuerier) DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error {
+	if m.DeleteCandidateStatusFunc != nil {
+		return m.DeleteCandidateStatusFunc(ctx, id)
 	}
 	return nil
 }

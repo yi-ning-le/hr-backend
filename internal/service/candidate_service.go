@@ -49,7 +49,7 @@ func (s *CandidateService) CreateCandidate(ctx context.Context, input model.Cand
 		return nil, err
 	}
 
-	// We need to fetch the job title to complete the return model, 
+	// We need to fetch the job title to complete the return model,
 	// but CreateCandidate returns the candidate row which doesn't have the title.
 	// We can either fetch the job separately or just use the input job title (if we trust it or if it's optional).
 	// The generated query `GetCandidate` joins with jobs. Let's use that to return the full object.
@@ -182,7 +182,7 @@ func (s *CandidateService) UpdateResume(ctx context.Context, id string, resumeUr
 	if err != nil {
 		return nil, err
 	}
-	
+
 	_, err = s.repo.UpdateCandidateResume(ctx, repository.UpdateCandidateResumeParams{
 		ID:        uuid,
 		ResumeUrl: resumeUrl,

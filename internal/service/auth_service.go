@@ -33,7 +33,7 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 	// 2. Create User
 	// Note: We should check if username/email exists, but the DB unique constraint handles it too.
 	// For better UX, we could do a read before write. Relying on DB constraint for now.
-	
+
 	params := repository.CreateUserParams{
 		Username:     input.Username,
 		Email:        input.Email,

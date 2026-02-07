@@ -152,7 +152,7 @@ func (h *CandidateHandler) UploadResume(c *gin.Context) {
 	// Update candidate resume URL in DB
 	// The OpenAPI spec says this returns { resumeUrl: string, candidate: Candidate }
 	// We need to call service to update the URL
-	
+
 	candidate, err := h.service.UpdateResume(c.Request.Context(), id, resumeUrl)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

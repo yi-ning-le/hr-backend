@@ -888,3 +888,176 @@ func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteEmployee, id)
 	return err
 }
+
+const createCandidateStatus = `-- name: CreateCandidateStatus :one
+INSERT INTO candidate_statuses (
+    name, slug, type, sort_order, color
+) VALUES (
+    $1, $2, $3, $4, $5
+)
+RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
+`
+
+type CreateCandidateStatusParams struct {
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Type      string `json:"type"`
+	SortOrder int32  `json:"sort_order"`
+	Color     string `json:"color"`
+}
+
+func (q *Queries) CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, createCandidateStatus,
+		arg.Name,
+		arg.Slug,
+		arg.Type,
+		arg.SortOrder,
+		arg.Color,
+	)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const deleteCandidateStatus = `-- name: DeleteCandidateStatus :exec
+DELETE FROM candidate_statuses
+WHERE id = $1
+`
+
+func (q *Queries) DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCandidateStatus, id)
+	return err
+}
+
+const getCandidateStatus = `-- name: GetCandidateStatus :one
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, getCandidateStatus, id)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCandidateStatusBySlug = `-- name: GetCandidateStatusBySlug :one
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+WHERE slug = $1 LIMIT 1
+`
+
+func (q *Queries) GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, getCandidateStatusBySlug, slug)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const listCandidateStatuses = `-- name: ListCandidateStatuses :many
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+ORDER BY sort_order ASC
+`
+
+func (q *Queries) ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error) {
+	rows, err := q.db.Query(ctx, listCandidateStatuses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CandidateStatus
+	for rows.Next() {
+		var i CandidateStatus
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Type,
+			&i.SortOrder,
+			&i.Color,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateCandidateStatusFields = `-- name: UpdateCandidateStatusFields :one
+UPDATE candidate_statuses
+SET name = $2,
+    color = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
+`
+
+type UpdateCandidateStatusFieldsParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Name  string      `json:"name"`
+	Color string      `json:"color"`
+}
+
+func (q *Queries) UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, updateCandidateStatusFields, arg.ID, arg.Name, arg.Color)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCandidateStatusOrder = `-- name: UpdateCandidateStatusOrder :exec
+UPDATE candidate_statuses
+SET sort_order = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateCandidateStatusOrderParams struct {
+	ID        pgtype.UUID `json:"id"`
+	SortOrder int32       `json:"sort_order"`
+}
+
+func (q *Queries) UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error {
+	_, err := q.db.Exec(ctx, updateCandidateStatusOrder, arg.ID, arg.SortOrder)
+	return err
+}

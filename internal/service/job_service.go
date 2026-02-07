@@ -102,7 +102,7 @@ func (s *JobService) ToggleJobStatus(ctx context.Context, id string) (*model.Job
 	// /jobs/{id}/status PATCH "Toggle job status"
 	// Response: 200 JobPosition.
 	// It does NOT have a requestBody. So it really is a toggle.
-	
+
 	currentJob, err := s.GetJob(ctx, id)
 	if err != nil {
 		return nil, err

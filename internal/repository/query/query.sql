@@ -161,3 +161,43 @@ RETURNING *;
 -- name: DeleteEmployee :exec
 DELETE FROM employees
 WHERE id = $1;
+
+-- Candidate Status queries
+
+-- name: ListCandidateStatuses :many
+SELECT * FROM candidate_statuses
+ORDER BY sort_order ASC;
+
+-- name: GetCandidateStatus :one
+SELECT * FROM candidate_statuses
+WHERE id = $1 LIMIT 1;
+
+-- name: GetCandidateStatusBySlug :one
+SELECT * FROM candidate_statuses
+WHERE slug = $1 LIMIT 1;
+
+-- name: CreateCandidateStatus :one
+INSERT INTO candidate_statuses (
+    name, slug, type, sort_order, color
+) VALUES (
+    $1, $2, $3, $4, $5
+)
+RETURNING *;
+
+-- name: UpdateCandidateStatusFields :one
+UPDATE candidate_statuses
+SET name = $2,
+    color = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateCandidateStatusOrder :exec
+UPDATE candidate_statuses
+SET sort_order = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
+-- name: DeleteCandidateStatus :exec
+DELETE FROM candidate_statuses
+WHERE id = $1;

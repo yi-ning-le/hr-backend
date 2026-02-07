@@ -34,12 +34,14 @@ func main() {
 	candidateService := service.NewCandidateService(repo)
 	authService := service.NewAuthService(repo, cfg.JWTSecret)
 	employeeService := service.NewEmployeeService(repo)
+	candidateStatusService := service.NewCandidateStatusService(repo)
 
 	// 5. Initialize Handlers
 	jobHandler := handler.NewJobHandler(jobService)
 	candidateHandler := handler.NewCandidateHandler(candidateService)
 	authHandler := handler.NewAuthHandler(authService)
 	employeeHandler := handler.NewEmployeeHandler(employeeService)
+	candidateStatusHandler := handler.NewCandidateStatusHandler(candidateStatusService)
 
 	// 6. Setup Router
 	r := gin.Default()
@@ -80,6 +82,13 @@ func main() {
 		api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
 		api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
 		api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
+
+		// Candidate Status Routes
+		api.GET("/candidate-statuses", candidateStatusHandler.ListStatuses)
+		api.POST("/candidate-statuses", candidateStatusHandler.CreateStatus)
+		api.PUT("/candidate-statuses/:id", candidateStatusHandler.UpdateStatus)
+		api.DELETE("/candidate-statuses/:id", candidateStatusHandler.DeleteStatus)
+		api.PATCH("/candidate-statuses/reorder", candidateStatusHandler.ReorderStatuses)
 
 		// Employee Routes
 		api.GET("/employees", employeeHandler.ListEmployees)

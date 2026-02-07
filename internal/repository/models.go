@@ -66,3 +66,13 @@ type Employee struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CandidateStatus struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	Type      string             `json:"type"`
+	SortOrder int32              `json:"sort_order"`
+	Color     string             `json:"color"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
