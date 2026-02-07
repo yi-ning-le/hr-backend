@@ -129,17 +129,17 @@ WHERE id = $1 LIMIT 1;
 
 -- name: ListEmployees :many
 SELECT * FROM employees
-WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
-  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
-  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
+WHERE (sqlc.narg('status')::varchar IS NULL OR status = sqlc.narg('status'))
+  AND (sqlc.narg('department')::varchar IS NULL OR department = sqlc.narg('department'))
+  AND (sqlc.narg('search')::varchar IS NULL OR first_name ILIKE '%' || sqlc.narg('search') || '%' OR last_name ILIKE '%' || sqlc.narg('search') || '%' OR email ILIKE '%' || sqlc.narg('search') || '%')
 ORDER BY created_at DESC
-LIMIT $4 OFFSET $5;
+LIMIT @limit_val OFFSET @offset_val;
 
 -- name: CountEmployees :one
 SELECT COUNT(*) FROM employees
-WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
-  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
-  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%');
+WHERE (sqlc.narg('status')::varchar IS NULL OR status = sqlc.narg('status'))
+  AND (sqlc.narg('department')::varchar IS NULL OR department = sqlc.narg('department'))
+  AND (sqlc.narg('search')::varchar IS NULL OR first_name ILIKE '%' || sqlc.narg('search') || '%' OR last_name ILIKE '%' || sqlc.narg('search') || '%' OR email ILIKE '%' || sqlc.narg('search') || '%');
 
 -- name: UpdateEmployee :one
 UPDATE employees
@@ -201,3 +201,64 @@ WHERE id = $1;
 -- name: DeleteCandidateStatus :exec
 DELETE FROM candidate_statuses
 WHERE id = $1;
+
+-- Recruitment Role queries
+
+-- name: CheckIsAdmin :one
+SELECT is_admin FROM users WHERE id = $1 LIMIT 1;
+
+-- name: CheckRecruiterRole :one
+SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1;
+
+-- name: GetActiveInterviewCount :one
+SELECT COUNT(*) FROM interviews 
+WHERE interviewer_id = $1 AND status = 'PENDING';
+
+-- name: AssignRecruiterRole :exec
+INSERT INTO recruitment_roles (employee_id, role_type)
+VALUES ($1, 'RECRUITER')
+ON CONFLICT (employee_id) DO NOTHING;
+
+-- name: RevokeRecruiterRole :exec
+DELETE FROM recruitment_roles WHERE employee_id = $1;
+
+-- name: ListRecruiters :many
+SELECT e.id, e.first_name, e.last_name, e.department, e.phone
+FROM recruitment_roles rr
+JOIN employees e ON rr.employee_id = e.id
+ORDER BY e.first_name;
+
+-- name: GetEmployeeByUserID :one
+SELECT * FROM employees WHERE user_id = $1 LIMIT 1;
+
+-- Interview queries
+
+-- name: CreateInterview :one
+INSERT INTO interviews (
+  candidate_id, interviewer_id, job_id, scheduled_time, status, notes
+) VALUES (
+  $1, $2, $3, $4, $5, $6
+)
+RETURNING *;
+
+-- name: GetInterview :one
+SELECT * FROM interviews WHERE id = $1 LIMIT 1;
+
+-- name: ListInterviewsByInterviewer :many
+SELECT * FROM interviews
+WHERE interviewer_id = $1
+ORDER BY scheduled_time DESC;
+
+-- name: TransferInterview :one
+UPDATE interviews
+SET interviewer_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- name: UpdateInterviewStatus :one
+UPDATE interviews
+SET status = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;

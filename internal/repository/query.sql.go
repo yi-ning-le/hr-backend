@@ -11,6 +11,61 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assignRecruiterRole = `-- name: AssignRecruiterRole :exec
+INSERT INTO recruitment_roles (employee_id, role_type)
+VALUES ($1, 'RECRUITER')
+ON CONFLICT (employee_id) DO NOTHING
+`
+
+func (q *Queries) AssignRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, assignRecruiterRole, employeeID)
+	return err
+}
+
+const checkIsAdmin = `-- name: CheckIsAdmin :one
+
+SELECT is_admin FROM users WHERE id = $1 LIMIT 1
+`
+
+// Recruitment Role queries
+func (q *Queries) CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, checkIsAdmin, id)
+	var is_admin bool
+	err := row.Scan(&is_admin)
+	return is_admin, err
+}
+
+const checkRecruiterRole = `-- name: CheckRecruiterRole :one
+SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1
+`
+
+func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, checkRecruiterRole, employeeID)
+	var employee_id pgtype.UUID
+	err := row.Scan(&employee_id)
+	return employee_id, err
+}
+
+const countEmployees = `-- name: CountEmployees :one
+SELECT COUNT(*) FROM employees
+WHERE ($1::varchar IS NULL OR status = $1)
+  AND ($2::varchar IS NULL OR department = $2)
+  AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
+`
+
+type CountEmployeesParams struct {
+	Status     pgtype.Text `json:"status"`
+	Department pgtype.Text `json:"department"`
+	Search     pgtype.Text `json:"search"`
+}
+
+func (q *Queries) CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countEmployees, arg.Status, arg.Department, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createCandidate = `-- name: CreateCandidate :one
 INSERT INTO candidates (
   name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at
@@ -71,6 +126,148 @@ func (q *Queries) CreateCandidate(ctx context.Context, arg CreateCandidateParams
 	return i, err
 }
 
+const createCandidateStatus = `-- name: CreateCandidateStatus :one
+INSERT INTO candidate_statuses (
+    name, slug, type, sort_order, color
+) VALUES (
+    $1, $2, $3, $4, $5
+)
+RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
+`
+
+type CreateCandidateStatusParams struct {
+	Name      string `json:"name"`
+	Slug      string `json:"slug"`
+	Type      string `json:"type"`
+	SortOrder int32  `json:"sort_order"`
+	Color     string `json:"color"`
+}
+
+func (q *Queries) CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, createCandidateStatus,
+		arg.Name,
+		arg.Slug,
+		arg.Type,
+		arg.SortOrder,
+		arg.Color,
+	)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createEmployee = `-- name: CreateEmployee :one
+
+INSERT INTO employees (
+  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id
+) VALUES (
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+)
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
+`
+
+type CreateEmployeeParams struct {
+	FirstName      string             `json:"first_name"`
+	LastName       string             `json:"last_name"`
+	Email          string             `json:"email"`
+	Phone          string             `json:"phone"`
+	Department     string             `json:"department"`
+	Position       string             `json:"position"`
+	Status         string             `json:"status"`
+	EmploymentType string             `json:"employment_type"`
+	JoinDate       pgtype.Timestamptz `json:"join_date"`
+	ManagerID      pgtype.UUID        `json:"manager_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+}
+
+// Employee queries
+func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error) {
+	row := q.db.QueryRow(ctx, createEmployee,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.Phone,
+		arg.Department,
+		arg.Position,
+		arg.Status,
+		arg.EmploymentType,
+		arg.JoinDate,
+		arg.ManagerID,
+		arg.UserID,
+	)
+	var i Employee
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.Department,
+		&i.Position,
+		&i.Status,
+		&i.EmploymentType,
+		&i.JoinDate,
+		&i.ManagerID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const createInterview = `-- name: CreateInterview :one
+
+INSERT INTO interviews (
+  candidate_id, interviewer_id, job_id, scheduled_time, status, notes
+) VALUES (
+  $1, $2, $3, $4, $5, $6
+)
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+`
+
+type CreateInterviewParams struct {
+	CandidateID   pgtype.UUID        `json:"candidate_id"`
+	InterviewerID pgtype.UUID        `json:"interviewer_id"`
+	JobID         pgtype.UUID        `json:"job_id"`
+	ScheduledTime pgtype.Timestamptz `json:"scheduled_time"`
+	Status        string             `json:"status"`
+	Notes         pgtype.Text        `json:"notes"`
+}
+
+// Interview queries
+func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, createInterview,
+		arg.CandidateID,
+		arg.InterviewerID,
+		arg.JobID,
+		arg.ScheduledTime,
+		arg.Status,
+		arg.Notes,
+	)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const createJob = `-- name: CreateJob :one
 INSERT INTO jobs (
   title, department, head_count, open_date, job_description, note, status
@@ -119,7 +316,7 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, avatar)
 VALUES ($1, $2, $3, $4)
-RETURNING id, username, email, password_hash, avatar, created_at, updated_at
+RETURNING id, username, email, password_hash, avatar, created_at, updated_at, is_admin
 `
 
 type CreateUserParams struct {
@@ -145,6 +342,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
@@ -159,6 +357,26 @@ func (q *Queries) DeleteCandidate(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteCandidateStatus = `-- name: DeleteCandidateStatus :exec
+DELETE FROM candidate_statuses
+WHERE id = $1
+`
+
+func (q *Queries) DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCandidateStatus, id)
+	return err
+}
+
+const deleteEmployee = `-- name: DeleteEmployee :exec
+DELETE FROM employees
+WHERE id = $1
+`
+
+func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteEmployee, id)
+	return err
+}
+
 const deleteJob = `-- name: DeleteJob :exec
 DELETE FROM jobs
 WHERE id = $1
@@ -167,6 +385,18 @@ WHERE id = $1
 func (q *Queries) DeleteJob(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteJob, id)
 	return err
+}
+
+const getActiveInterviewCount = `-- name: GetActiveInterviewCount :one
+SELECT COUNT(*) FROM interviews 
+WHERE interviewer_id = $1 AND status = 'PENDING'
+`
+
+func (q *Queries) GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, getActiveInterviewCount, interviewerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
 }
 
 const getCandidate = `-- name: GetCandidate :one
@@ -219,6 +449,122 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 	return i, err
 }
 
+const getCandidateStatus = `-- name: GetCandidateStatus :one
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, getCandidateStatus, id)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getCandidateStatusBySlug = `-- name: GetCandidateStatusBySlug :one
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+WHERE slug = $1 LIMIT 1
+`
+
+func (q *Queries) GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, getCandidateStatusBySlug, slug)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getEmployee = `-- name: GetEmployee :one
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
+WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error) {
+	row := q.db.QueryRow(ctx, getEmployee, id)
+	var i Employee
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.Department,
+		&i.Position,
+		&i.Status,
+		&i.EmploymentType,
+		&i.JoinDate,
+		&i.ManagerID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getEmployeeByUserID = `-- name: GetEmployeeByUserID :one
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees WHERE user_id = $1 LIMIT 1
+`
+
+func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error) {
+	row := q.db.QueryRow(ctx, getEmployeeByUserID, userID)
+	var i Employee
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.Department,
+		&i.Position,
+		&i.Status,
+		&i.EmploymentType,
+		&i.JoinDate,
+		&i.ManagerID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getInterview = `-- name: GetInterview :one
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at FROM interviews WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error) {
+	row := q.db.QueryRow(ctx, getInterview, id)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getJob = `-- name: GetJob :one
 SELECT id, title, department, head_count, open_date, job_description, note, status, created_at, updated_at FROM jobs
 WHERE id = $1 LIMIT 1
@@ -243,7 +589,7 @@ func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, password_hash, avatar, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
+SELECT id, username, email, password_hash, avatar, created_at, updated_at, is_admin FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error) {
@@ -257,12 +603,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, password_hash, avatar, created_at, updated_at FROM users WHERE username = $1 LIMIT 1
+SELECT id, username, email, password_hash, avatar, created_at, updated_at, is_admin FROM users WHERE username = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
@@ -276,8 +623,45 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Avatar,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.IsAdmin,
 	)
 	return i, err
+}
+
+const listCandidateStatuses = `-- name: ListCandidateStatuses :many
+
+SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
+ORDER BY sort_order ASC
+`
+
+// Candidate Status queries
+func (q *Queries) ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error) {
+	rows, err := q.db.Query(ctx, listCandidateStatuses)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []CandidateStatus
+	for rows.Next() {
+		var i CandidateStatus
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Slug,
+			&i.Type,
+			&i.SortOrder,
+			&i.Color,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listCandidates = `-- name: ListCandidates :many
@@ -344,6 +728,100 @@ func (q *Queries) ListCandidates(ctx context.Context, dollar_1 pgtype.UUID) ([]L
 	return items, nil
 }
 
+const listEmployees = `-- name: ListEmployees :many
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
+WHERE ($1::varchar IS NULL OR status = $1)
+  AND ($2::varchar IS NULL OR department = $2)
+  AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
+ORDER BY created_at DESC
+LIMIT $5 OFFSET $4
+`
+
+type ListEmployeesParams struct {
+	Status     pgtype.Text `json:"status"`
+	Department pgtype.Text `json:"department"`
+	Search     pgtype.Text `json:"search"`
+	OffsetVal  int32       `json:"offset_val"`
+	LimitVal   int32       `json:"limit_val"`
+}
+
+func (q *Queries) ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error) {
+	rows, err := q.db.Query(ctx, listEmployees,
+		arg.Status,
+		arg.Department,
+		arg.Search,
+		arg.OffsetVal,
+		arg.LimitVal,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Employee
+	for rows.Next() {
+		var i Employee
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Email,
+			&i.Phone,
+			&i.Department,
+			&i.Position,
+			&i.Status,
+			&i.EmploymentType,
+			&i.JoinDate,
+			&i.ManagerID,
+			&i.UserID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInterviewsByInterviewer = `-- name: ListInterviewsByInterviewer :many
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at FROM interviews
+WHERE interviewer_id = $1
+ORDER BY scheduled_time DESC
+`
+
+func (q *Queries) ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error) {
+	rows, err := q.db.Query(ctx, listInterviewsByInterviewer, interviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Interview
+	for rows.Next() {
+		var i Interview
+		if err := rows.Scan(
+			&i.ID,
+			&i.CandidateID,
+			&i.InterviewerID,
+			&i.JobID,
+			&i.ScheduledTime,
+			&i.Status,
+			&i.Notes,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listJobs = `-- name: ListJobs :many
 SELECT id, title, department, head_count, open_date, job_description, note, status, created_at, updated_at FROM jobs
 ORDER BY created_at DESC
@@ -378,6 +856,86 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listRecruiters = `-- name: ListRecruiters :many
+SELECT e.id, e.first_name, e.last_name, e.department, e.phone
+FROM recruitment_roles rr
+JOIN employees e ON rr.employee_id = e.id
+ORDER BY e.first_name
+`
+
+type ListRecruitersRow struct {
+	ID         pgtype.UUID `json:"id"`
+	FirstName  string      `json:"first_name"`
+	LastName   string      `json:"last_name"`
+	Department string      `json:"department"`
+	Phone      string      `json:"phone"`
+}
+
+func (q *Queries) ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error) {
+	rows, err := q.db.Query(ctx, listRecruiters)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListRecruitersRow
+	for rows.Next() {
+		var i ListRecruitersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Department,
+			&i.Phone,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeRecruiterRole = `-- name: RevokeRecruiterRole :exec
+DELETE FROM recruitment_roles WHERE employee_id = $1
+`
+
+func (q *Queries) RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeRecruiterRole, employeeID)
+	return err
+}
+
+const transferInterview = `-- name: TransferInterview :one
+UPDATE interviews
+SET interviewer_id = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+`
+
+type TransferInterviewParams struct {
+	ID            pgtype.UUID `json:"id"`
+	InterviewerID pgtype.UUID `json:"interviewer_id"`
+}
+
+func (q *Queries) TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, transferInterview, arg.ID, arg.InterviewerID)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
 }
 
 const updateCandidate = `-- name: UpdateCandidate :one
@@ -560,6 +1118,152 @@ func (q *Queries) UpdateCandidateStatus(ctx context.Context, arg UpdateCandidate
 	return i, err
 }
 
+const updateCandidateStatusFields = `-- name: UpdateCandidateStatusFields :one
+UPDATE candidate_statuses
+SET name = $2,
+    color = $3,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
+`
+
+type UpdateCandidateStatusFieldsParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Name  string      `json:"name"`
+	Color string      `json:"color"`
+}
+
+func (q *Queries) UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error) {
+	row := q.db.QueryRow(ctx, updateCandidateStatusFields, arg.ID, arg.Name, arg.Color)
+	var i CandidateStatus
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.Slug,
+		&i.Type,
+		&i.SortOrder,
+		&i.Color,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateCandidateStatusOrder = `-- name: UpdateCandidateStatusOrder :exec
+UPDATE candidate_statuses
+SET sort_order = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+type UpdateCandidateStatusOrderParams struct {
+	ID        pgtype.UUID `json:"id"`
+	SortOrder int32       `json:"sort_order"`
+}
+
+func (q *Queries) UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error {
+	_, err := q.db.Exec(ctx, updateCandidateStatusOrder, arg.ID, arg.SortOrder)
+	return err
+}
+
+const updateEmployee = `-- name: UpdateEmployee :one
+UPDATE employees
+SET first_name = $2,
+    last_name = $3,
+    email = $4,
+    phone = $5,
+    department = $6,
+    position = $7,
+    status = $8,
+    employment_type = $9,
+    join_date = $10,
+    manager_id = $11,
+    user_id = $12,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
+`
+
+type UpdateEmployeeParams struct {
+	ID             pgtype.UUID        `json:"id"`
+	FirstName      string             `json:"first_name"`
+	LastName       string             `json:"last_name"`
+	Email          string             `json:"email"`
+	Phone          string             `json:"phone"`
+	Department     string             `json:"department"`
+	Position       string             `json:"position"`
+	Status         string             `json:"status"`
+	EmploymentType string             `json:"employment_type"`
+	JoinDate       pgtype.Timestamptz `json:"join_date"`
+	ManagerID      pgtype.UUID        `json:"manager_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+}
+
+func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error) {
+	row := q.db.QueryRow(ctx, updateEmployee,
+		arg.ID,
+		arg.FirstName,
+		arg.LastName,
+		arg.Email,
+		arg.Phone,
+		arg.Department,
+		arg.Position,
+		arg.Status,
+		arg.EmploymentType,
+		arg.JoinDate,
+		arg.ManagerID,
+		arg.UserID,
+	)
+	var i Employee
+	err := row.Scan(
+		&i.ID,
+		&i.FirstName,
+		&i.LastName,
+		&i.Email,
+		&i.Phone,
+		&i.Department,
+		&i.Position,
+		&i.Status,
+		&i.EmploymentType,
+		&i.JoinDate,
+		&i.ManagerID,
+		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const updateInterviewStatus = `-- name: UpdateInterviewStatus :one
+UPDATE interviews
+SET status = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+`
+
+type UpdateInterviewStatusParams struct {
+	ID     pgtype.UUID `json:"id"`
+	Status string      `json:"status"`
+}
+
+func (q *Queries) UpdateInterviewStatus(ctx context.Context, arg UpdateInterviewStatusParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, updateInterviewStatus, arg.ID, arg.Status)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.Notes,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateJob = `-- name: UpdateJob :one
 UPDATE jobs
 SET title = $2,
@@ -641,423 +1345,4 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.UpdatedAt,
 	)
 	return i, err
-}
-
-// ============ Employee Queries ============
-
-const createEmployee = `-- name: CreateEmployee :one
-INSERT INTO employees (
-  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id
-) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
-)
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
-`
-
-type CreateEmployeeParams struct {
-	FirstName      string             `json:"first_name"`
-	LastName       string             `json:"last_name"`
-	Email          string             `json:"email"`
-	Phone          string             `json:"phone"`
-	Department     string             `json:"department"`
-	Position       string             `json:"position"`
-	Status         string             `json:"status"`
-	EmploymentType string             `json:"employment_type"`
-	JoinDate       pgtype.Timestamptz `json:"join_date"`
-	ManagerID      pgtype.UUID        `json:"manager_id"`
-	UserID         pgtype.UUID        `json:"user_id"`
-}
-
-func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error) {
-	row := q.db.QueryRow(ctx, createEmployee,
-		arg.FirstName,
-		arg.LastName,
-		arg.Email,
-		arg.Phone,
-		arg.Department,
-		arg.Position,
-		arg.Status,
-		arg.EmploymentType,
-		arg.JoinDate,
-		arg.ManagerID,
-		arg.UserID,
-	)
-	var i Employee
-	err := row.Scan(
-		&i.ID,
-		&i.FirstName,
-		&i.LastName,
-		&i.Email,
-		&i.Phone,
-		&i.Department,
-		&i.Position,
-		&i.Status,
-		&i.EmploymentType,
-		&i.JoinDate,
-		&i.ManagerID,
-		&i.UserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getEmployee = `-- name: GetEmployee :one
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
-WHERE id = $1 LIMIT 1
-`
-
-func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error) {
-	row := q.db.QueryRow(ctx, getEmployee, id)
-	var i Employee
-	err := row.Scan(
-		&i.ID,
-		&i.FirstName,
-		&i.LastName,
-		&i.Email,
-		&i.Phone,
-		&i.Department,
-		&i.Position,
-		&i.Status,
-		&i.EmploymentType,
-		&i.JoinDate,
-		&i.ManagerID,
-		&i.UserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const listEmployees = `-- name: ListEmployees :many
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
-WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
-  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
-  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
-ORDER BY created_at DESC
-LIMIT $4 OFFSET $5
-`
-
-type ListEmployeesParams struct {
-	Status     pgtype.Text `json:"status"`
-	Department pgtype.Text `json:"department"`
-	Search     pgtype.Text `json:"search"`
-	Limit      int32       `json:"limit"`
-	Offset     int32       `json:"offset"`
-}
-
-func (q *Queries) ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error) {
-	rows, err := q.db.Query(ctx, listEmployees,
-		arg.Status,
-		arg.Department,
-		arg.Search,
-		arg.Limit,
-		arg.Offset,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []Employee
-	for rows.Next() {
-		var i Employee
-		if err := rows.Scan(
-			&i.ID,
-			&i.FirstName,
-			&i.LastName,
-			&i.Email,
-			&i.Phone,
-			&i.Department,
-			&i.Position,
-			&i.Status,
-			&i.EmploymentType,
-			&i.JoinDate,
-			&i.ManagerID,
-			&i.UserID,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const countEmployees = `-- name: CountEmployees :one
-SELECT COUNT(*) FROM employees
-WHERE ($1::varchar IS NULL OR $1 = '' OR status = $1)
-  AND ($2::varchar IS NULL OR $2 = '' OR department = $2)
-  AND ($3::varchar IS NULL OR $3 = '' OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
-`
-
-type CountEmployeesParams struct {
-	Status     pgtype.Text `json:"status"`
-	Department pgtype.Text `json:"department"`
-	Search     pgtype.Text `json:"search"`
-}
-
-func (q *Queries) CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error) {
-	row := q.db.QueryRow(ctx, countEmployees,
-		arg.Status,
-		arg.Department,
-		arg.Search,
-	)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
-const updateEmployee = `-- name: UpdateEmployee :one
-UPDATE employees
-SET first_name = $2,
-    last_name = $3,
-    email = $4,
-    phone = $5,
-    department = $6,
-    position = $7,
-    status = $8,
-    employment_type = $9,
-    join_date = $10,
-    manager_id = $11,
-    user_id = $12,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
-`
-
-type UpdateEmployeeParams struct {
-	ID             pgtype.UUID        `json:"id"`
-	FirstName      string             `json:"first_name"`
-	LastName       string             `json:"last_name"`
-	Email          string             `json:"email"`
-	Phone          string             `json:"phone"`
-	Department     string             `json:"department"`
-	Position       string             `json:"position"`
-	Status         string             `json:"status"`
-	EmploymentType string             `json:"employment_type"`
-	JoinDate       pgtype.Timestamptz `json:"join_date"`
-	ManagerID      pgtype.UUID        `json:"manager_id"`
-	UserID         pgtype.UUID        `json:"user_id"`
-}
-
-func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error) {
-	row := q.db.QueryRow(ctx, updateEmployee,
-		arg.ID,
-		arg.FirstName,
-		arg.LastName,
-		arg.Email,
-		arg.Phone,
-		arg.Department,
-		arg.Position,
-		arg.Status,
-		arg.EmploymentType,
-		arg.JoinDate,
-		arg.ManagerID,
-		arg.UserID,
-	)
-	var i Employee
-	err := row.Scan(
-		&i.ID,
-		&i.FirstName,
-		&i.LastName,
-		&i.Email,
-		&i.Phone,
-		&i.Department,
-		&i.Position,
-		&i.Status,
-		&i.EmploymentType,
-		&i.JoinDate,
-		&i.ManagerID,
-		&i.UserID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const deleteEmployee = `-- name: DeleteEmployee :exec
-DELETE FROM employees
-WHERE id = $1
-`
-
-func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteEmployee, id)
-	return err
-}
-
-const createCandidateStatus = `-- name: CreateCandidateStatus :one
-INSERT INTO candidate_statuses (
-    name, slug, type, sort_order, color
-) VALUES (
-    $1, $2, $3, $4, $5
-)
-RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
-`
-
-type CreateCandidateStatusParams struct {
-	Name      string `json:"name"`
-	Slug      string `json:"slug"`
-	Type      string `json:"type"`
-	SortOrder int32  `json:"sort_order"`
-	Color     string `json:"color"`
-}
-
-func (q *Queries) CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error) {
-	row := q.db.QueryRow(ctx, createCandidateStatus,
-		arg.Name,
-		arg.Slug,
-		arg.Type,
-		arg.SortOrder,
-		arg.Color,
-	)
-	var i CandidateStatus
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.Type,
-		&i.SortOrder,
-		&i.Color,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const deleteCandidateStatus = `-- name: DeleteCandidateStatus :exec
-DELETE FROM candidate_statuses
-WHERE id = $1
-`
-
-func (q *Queries) DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error {
-	_, err := q.db.Exec(ctx, deleteCandidateStatus, id)
-	return err
-}
-
-const getCandidateStatus = `-- name: GetCandidateStatus :one
-SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
-WHERE id = $1 LIMIT 1
-`
-
-func (q *Queries) GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error) {
-	row := q.db.QueryRow(ctx, getCandidateStatus, id)
-	var i CandidateStatus
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.Type,
-		&i.SortOrder,
-		&i.Color,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const getCandidateStatusBySlug = `-- name: GetCandidateStatusBySlug :one
-SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
-WHERE slug = $1 LIMIT 1
-`
-
-func (q *Queries) GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error) {
-	row := q.db.QueryRow(ctx, getCandidateStatusBySlug, slug)
-	var i CandidateStatus
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.Type,
-		&i.SortOrder,
-		&i.Color,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const listCandidateStatuses = `-- name: ListCandidateStatuses :many
-SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
-ORDER BY sort_order ASC
-`
-
-func (q *Queries) ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error) {
-	rows, err := q.db.Query(ctx, listCandidateStatuses)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CandidateStatus
-	for rows.Next() {
-		var i CandidateStatus
-		if err := rows.Scan(
-			&i.ID,
-			&i.Name,
-			&i.Slug,
-			&i.Type,
-			&i.SortOrder,
-			&i.Color,
-			&i.CreatedAt,
-			&i.UpdatedAt,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const updateCandidateStatusFields = `-- name: UpdateCandidateStatusFields :one
-UPDATE candidate_statuses
-SET name = $2,
-    color = $3,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, name, slug, type, sort_order, color, created_at, updated_at
-`
-
-type UpdateCandidateStatusFieldsParams struct {
-	ID    pgtype.UUID `json:"id"`
-	Name  string      `json:"name"`
-	Color string      `json:"color"`
-}
-
-func (q *Queries) UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error) {
-	row := q.db.QueryRow(ctx, updateCandidateStatusFields, arg.ID, arg.Name, arg.Color)
-	var i CandidateStatus
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.Type,
-		&i.SortOrder,
-		&i.Color,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
-const updateCandidateStatusOrder = `-- name: UpdateCandidateStatusOrder :exec
-UPDATE candidate_statuses
-SET sort_order = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-`
-
-type UpdateCandidateStatusOrderParams struct {
-	ID        pgtype.UUID `json:"id"`
-	SortOrder int32       `json:"sort_order"`
-}
-
-func (q *Queries) UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error {
-	_, err := q.db.Exec(ctx, updateCandidateStatusOrder, arg.ID, arg.SortOrder)
-	return err
 }

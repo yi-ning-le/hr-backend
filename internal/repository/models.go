@@ -26,6 +26,48 @@ type Candidate struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 }
 
+type CandidateStatus struct {
+	ID        pgtype.UUID        `json:"id"`
+	Name      string             `json:"name"`
+	Slug      string             `json:"slug"`
+	Type      string             `json:"type"`
+	SortOrder int32              `json:"sort_order"`
+	Color     string             `json:"color"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Employee struct {
+	ID         pgtype.UUID `json:"id"`
+	FirstName  string      `json:"first_name"`
+	LastName   string      `json:"last_name"`
+	Email      string      `json:"email"`
+	Phone      string      `json:"phone"`
+	Department string      `json:"department"`
+	Position   string      `json:"position"`
+	// Active, OnLeave, Resigned, Terminated
+	Status string `json:"status"`
+	// FullTime, PartTime, Contract, Intern
+	EmploymentType string             `json:"employment_type"`
+	JoinDate       pgtype.Timestamptz `json:"join_date"`
+	ManagerID      pgtype.UUID        `json:"manager_id"`
+	UserID         pgtype.UUID        `json:"user_id"`
+	CreatedAt      pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+}
+
+type Interview struct {
+	ID            pgtype.UUID        `json:"id"`
+	CandidateID   pgtype.UUID        `json:"candidate_id"`
+	InterviewerID pgtype.UUID        `json:"interviewer_id"`
+	JobID         pgtype.UUID        `json:"job_id"`
+	ScheduledTime pgtype.Timestamptz `json:"scheduled_time"`
+	Status        string             `json:"status"`
+	Notes         pgtype.Text        `json:"notes"`
+	CreatedAt     pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
+}
+
 type Job struct {
 	ID             pgtype.UUID        `json:"id"`
 	Title          string             `json:"title"`
@@ -39,6 +81,12 @@ type Job struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type RecruitmentRole struct {
+	EmployeeID pgtype.UUID        `json:"employee_id"`
+	RoleType   string             `json:"role_type"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+}
+
 type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`
@@ -47,32 +95,5 @@ type User struct {
 	Avatar       pgtype.Text        `json:"avatar"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt    pgtype.Timestamptz `json:"updated_at"`
-}
-
-type Employee struct {
-	ID             pgtype.UUID        `json:"id"`
-	FirstName      string             `json:"first_name"`
-	LastName       string             `json:"last_name"`
-	Email          string             `json:"email"`
-	Phone          string             `json:"phone"`
-	Department     string             `json:"department"`
-	Position       string             `json:"position"`
-	Status         string             `json:"status"`
-	EmploymentType string             `json:"employment_type"`
-	JoinDate       pgtype.Timestamptz `json:"join_date"`
-	ManagerID      pgtype.UUID        `json:"manager_id"`
-	UserID         pgtype.UUID        `json:"user_id"`
-	CreatedAt      pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
-}
-
-type CandidateStatus struct {
-	ID        pgtype.UUID        `json:"id"`
-	Name      string             `json:"name"`
-	Slug      string             `json:"slug"`
-	Type      string             `json:"type"`
-	SortOrder int32              `json:"sort_order"`
-	Color     string             `json:"color"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	IsAdmin      bool               `json:"is_admin"`
 }

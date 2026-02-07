@@ -42,6 +42,7 @@ func main() {
 	authHandler := handler.NewAuthHandler(authService)
 	employeeHandler := handler.NewEmployeeHandler(employeeService)
 	candidateStatusHandler := handler.NewCandidateStatusHandler(candidateStatusService)
+	recruitmentHandler := handler.NewRecruitmentHandler(repo)
 
 	// 6. Setup Router
 	r := gin.Default()
@@ -96,6 +97,27 @@ func main() {
 		api.GET("/employees/:id", employeeHandler.GetEmployee)
 		api.PUT("/employees/:id", employeeHandler.UpdateEmployee)
 		api.DELETE("/employees/:id", employeeHandler.DeleteEmployee)
+
+		// Recruitment Role Routes
+		api.GET("/recruitment/role", recruitmentHandler.GetMyRole)
+	}
+
+	// Admin only Recruitment Routes
+	adminApi := r.Group("/recruitment/admin")
+	adminApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	adminApi.Use(middleware.RequireAdmin(repo))
+	{
+		adminApi.GET("/recruiters", recruitmentHandler.GetRecruiters)
+		adminApi.POST("/recruiters", recruitmentHandler.AssignRecruiter)
+		adminApi.DELETE("/recruiters", recruitmentHandler.RevokeRecruiter)
+	}
+
+	// Recruiter only Routes
+	recruiterApi := r.Group("/recruitment")
+	recruiterApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	recruiterApi.Use(middleware.RequireRecruiter(repo))
+	{
+		recruiterApi.POST("/interviews/:id/transfer", recruitmentHandler.TransferInterview)
 	}
 
 	// Health Check

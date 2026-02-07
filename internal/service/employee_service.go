@@ -95,8 +95,8 @@ func (s *EmployeeService) ListEmployees(ctx context.Context, status, department,
 		Status:     pgtype.Text{String: status, Valid: status != ""},
 		Department: pgtype.Text{String: department, Valid: department != ""},
 		Search:     pgtype.Text{String: search, Valid: search != ""},
-		Limit:      int32(limit),
-		Offset:     int32(offset),
+		LimitVal:   int32(limit),
+		OffsetVal:  int32(offset),
 	}
 
 	employees, err := s.repo.ListEmployees(ctx, params)
@@ -105,9 +105,9 @@ func (s *EmployeeService) ListEmployees(ctx context.Context, status, department,
 	}
 
 	countParams := repository.CountEmployeesParams{
-		Status:     params.Status,
-		Department: params.Department,
-		Search:     params.Search,
+		Status:     pgtype.Text{String: status, Valid: status != ""},
+		Department: pgtype.Text{String: department, Valid: department != ""},
+		Search:     pgtype.Text{String: search, Valid: search != ""},
 	}
 	total, err := s.repo.CountEmployees(ctx, countParams)
 	if err != nil {

@@ -11,38 +11,52 @@ import (
 )
 
 type Querier interface {
+	AssignRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
+	// Recruitment Role queries
+	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
+	CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
+	CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error)
+	// Employee queries
+	CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error)
+	// Interview queries
+	CreateInterview(ctx context.Context, arg CreateInterviewParams) (Interview, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteCandidate(ctx context.Context, id pgtype.UUID) error
+	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
+	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
+	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
+	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
+	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
+	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
+	GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error)
+	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Candidate Status queries
+	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
 	ListCandidates(ctx context.Context, dollar_1 pgtype.UUID) ([]ListCandidatesRow, error)
+	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
+	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)
+	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
+	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
+	TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error)
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)
 	UpdateCandidateNote(ctx context.Context, arg UpdateCandidateNoteParams) (Candidate, error)
 	UpdateCandidateResume(ctx context.Context, arg UpdateCandidateResumeParams) (Candidate, error)
 	UpdateCandidateStatus(ctx context.Context, arg UpdateCandidateStatusParams) (Candidate, error)
-	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
-	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)
-	// Employee methods
-	CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error)
-	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
-	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
-	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
-	UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error)
-	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
-	// Candidate Status methods
-	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
-	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
-	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
-	CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error)
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)
 	UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error
-	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
+	UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error)
+	UpdateInterviewStatus(ctx context.Context, arg UpdateInterviewStatusParams) (Interview, error)
+	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
+	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)
 }
 
 var _ Querier = (*Queries)(nil)
