@@ -11,6 +11,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
+const assignHRRole = `-- name: AssignHRRole :exec
+
+UPDATE employees
+SET employee_type = 'HR',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+// HR Role queries
+func (q *Queries) AssignHRRole(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, assignHRRole, id)
+	return err
+}
+
 const assignRecruiterRole = `-- name: AssignRecruiterRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'RECRUITER')
@@ -35,6 +49,17 @@ func (q *Queries) CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error
 	return is_admin, err
 }
 
+const checkIsHR = `-- name: CheckIsHR :one
+SELECT employee_type = 'HR' as is_hr FROM employees WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, checkIsHR, id)
+	var is_hr bool
+	err := row.Scan(&is_hr)
+	return is_hr, err
+}
+
 const checkRecruiterRole = `-- name: CheckRecruiterRole :one
 SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1
 `
@@ -47,10 +72,12 @@ func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID
 }
 
 const countEmployees = `-- name: CountEmployees :one
-SELECT COUNT(*) FROM employees
-WHERE ($1::varchar IS NULL OR status = $1)
-  AND ($2::varchar IS NULL OR department = $2)
-  AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
+SELECT COUNT(*) FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE ($1::varchar IS NULL OR e.status = $1)
+  AND ($2::varchar IS NULL OR e.department = $2)
+  AND ($3::varchar IS NULL OR e.first_name ILIKE '%' || $3 || '%' OR e.last_name ILIKE '%' || $3 || '%' OR e.email ILIKE '%' || $3 || '%')
+  AND u.is_admin = false
 `
 
 type CountEmployeesParams struct {
@@ -168,11 +195,11 @@ func (q *Queries) CreateCandidateStatus(ctx context.Context, arg CreateCandidate
 const createEmployee = `-- name: CreateEmployee :one
 
 INSERT INTO employees (
-  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id
+  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, employee_type
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type
 `
 
 type CreateEmployeeParams struct {
@@ -187,6 +214,7 @@ type CreateEmployeeParams struct {
 	JoinDate       pgtype.Timestamptz `json:"join_date"`
 	ManagerID      pgtype.UUID        `json:"manager_id"`
 	UserID         pgtype.UUID        `json:"user_id"`
+	EmployeeType   string             `json:"employee_type"`
 }
 
 // Employee queries
@@ -203,6 +231,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		arg.JoinDate,
 		arg.ManagerID,
 		arg.UserID,
+		arg.EmployeeType,
 	)
 	var i Employee
 	err := row.Scan(
@@ -220,6 +249,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmployeeType,
 	)
 	return i, err
 }
@@ -492,7 +522,7 @@ func (q *Queries) GetCandidateStatusBySlug(ctx context.Context, slug string) (Ca
 }
 
 const getEmployee = `-- name: GetEmployee :one
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type FROM employees
 WHERE id = $1 LIMIT 1
 `
 
@@ -514,12 +544,13 @@ func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, er
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmployeeType,
 	)
 	return i, err
 }
 
 const getEmployeeByUserID = `-- name: GetEmployeeByUserID :one
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees WHERE user_id = $1 LIMIT 1
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type FROM employees WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error) {
@@ -540,6 +571,7 @@ func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (
 		&i.UserID,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.EmployeeType,
 	)
 	return i, err
 }
@@ -729,11 +761,13 @@ func (q *Queries) ListCandidates(ctx context.Context, dollar_1 pgtype.UUID) ([]L
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at FROM employees
-WHERE ($1::varchar IS NULL OR status = $1)
-  AND ($2::varchar IS NULL OR department = $2)
-  AND ($3::varchar IS NULL OR first_name ILIKE '%' || $3 || '%' OR last_name ILIKE '%' || $3 || '%' OR email ILIKE '%' || $3 || '%')
-ORDER BY created_at DESC
+SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.department, e.position, e.status, e.employment_type, e.join_date, e.manager_id, e.user_id, e.created_at, e.updated_at, e.employee_type FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE ($1::varchar IS NULL OR e.status = $1)
+  AND ($2::varchar IS NULL OR e.department = $2)
+  AND ($3::varchar IS NULL OR e.first_name ILIKE '%' || $3 || '%' OR e.last_name ILIKE '%' || $3 || '%' OR e.email ILIKE '%' || $3 || '%')
+  AND u.is_admin = false
+ORDER BY e.created_at DESC
 LIMIT $5 OFFSET $4
 `
 
@@ -775,6 +809,49 @@ func (q *Queries) ListEmployees(ctx context.Context, arg ListEmployeesParams) ([
 			&i.UserID,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.EmployeeType,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHRs = `-- name: ListHRs :many
+SELECT e.id, e.first_name, e.last_name, e.department, e.phone
+FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE e.employee_type = 'HR' AND u.is_admin = false
+ORDER BY e.first_name
+`
+
+type ListHRsRow struct {
+	ID         pgtype.UUID `json:"id"`
+	FirstName  string      `json:"first_name"`
+	LastName   string      `json:"last_name"`
+	Department string      `json:"department"`
+	Phone      string      `json:"phone"`
+}
+
+func (q *Queries) ListHRs(ctx context.Context) ([]ListHRsRow, error) {
+	rows, err := q.db.Query(ctx, listHRs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListHRsRow
+	for rows.Next() {
+		var i ListHRsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.FirstName,
+			&i.LastName,
+			&i.Department,
+			&i.Phone,
 		); err != nil {
 			return nil, err
 		}
@@ -862,6 +939,8 @@ const listRecruiters = `-- name: ListRecruiters :many
 SELECT e.id, e.first_name, e.last_name, e.department, e.phone
 FROM recruitment_roles rr
 JOIN employees e ON rr.employee_id = e.id
+JOIN users u ON e.user_id = u.id
+WHERE u.is_admin = false
 ORDER BY e.first_name
 `
 
@@ -897,6 +976,18 @@ func (q *Queries) ListRecruiters(ctx context.Context) ([]ListRecruitersRow, erro
 		return nil, err
 	}
 	return items, nil
+}
+
+const revokeHRRole = `-- name: RevokeHRRole :exec
+UPDATE employees
+SET employee_type = 'EMPLOYEE',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+func (q *Queries) RevokeHRRole(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeHRRole, id)
+	return err
 }
 
 const revokeRecruiterRole = `-- name: RevokeRecruiterRole :exec
@@ -1181,7 +1272,7 @@ SET first_name = $2,
     user_id = $12,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type
 `
 
 type UpdateEmployeeParams struct {
@@ -1228,6 +1319,37 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.JoinDate,
 		&i.ManagerID,
 		&i.UserID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.EmployeeType,
+	)
+	return i, err
+}
+
+const updateInterviewNote = `-- name: UpdateInterviewNote :one
+UPDATE interviews
+SET notes = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+`
+
+type UpdateInterviewNoteParams struct {
+	ID    pgtype.UUID `json:"id"`
+	Notes pgtype.Text `json:"notes"`
+}
+
+func (q *Queries) UpdateInterviewNote(ctx context.Context, arg UpdateInterviewNoteParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, updateInterviewNote, arg.ID, arg.Notes)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

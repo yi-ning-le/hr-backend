@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"fmt"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+const defaultPassword = "password123"
 
 type EmployeeService struct {
 	repo repository.Querier
@@ -19,6 +22,7 @@ func NewEmployeeService(repo repository.Querier) *EmployeeService {
 }
 
 func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.EmployeeInput) (*model.Employee, error) {
+	// Set defaults
 	status := input.Status
 	if status == "" {
 		status = "Active"
@@ -27,25 +31,39 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 	if employmentType == "" {
 		employmentType = "FullTime"
 	}
+	employeeType := input.EmployeeType
+	if employeeType == "" {
+		employeeType = "EMPLOYEE"
+	}
 
+	// 1. Auto-create user account for this employee
+	hashedPassword, err := utils.HashPassword(defaultPassword)
+	if err != nil {
+		return nil, fmt.Errorf("failed to hash password: %w", err)
+	}
+
+	userParams := repository.CreateUserParams{
+		Username:     input.Email,
+		Email:        input.Email,
+		PasswordHash: hashedPassword,
+		Avatar:       pgtype.Text{Valid: false},
+	}
+
+	user, err := s.repo.CreateUser(ctx, userParams)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user account: %w", err)
+	}
+
+	// 2. Parse manager ID if provided
 	var managerID pgtype.UUID
 	if input.ManagerID != "" {
-		var err error
 		managerID, err = utils.StringToUUID(input.ManagerID)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	var userID pgtype.UUID
-	if input.UserID != "" {
-		var err error
-		userID, err = utils.StringToUUID(input.UserID)
-		if err != nil {
-			return nil, err
-		}
-	}
-
+	// 3. Create employee linked to auto-created user
 	params := repository.CreateEmployeeParams{
 		FirstName:      input.FirstName,
 		LastName:       input.LastName,
@@ -55,9 +73,10 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 		Position:       input.Position,
 		Status:         status,
 		EmploymentType: employmentType,
+		EmployeeType:   employeeType,
 		JoinDate:       pgtype.Timestamptz{Time: input.JoinDate, Valid: true},
 		ManagerID:      managerID,
-		UserID:         userID,
+		UserID:         user.ID, // Link to auto-created user
 	}
 
 	emp, err := s.repo.CreateEmployee(ctx, params)
@@ -191,6 +210,7 @@ func mapEmployeeToModel(e repository.Employee) *model.Employee {
 		Position:       e.Position,
 		Status:         e.Status,
 		EmploymentType: e.EmploymentType,
+		EmployeeType:   e.EmployeeType,
 		JoinDate:       e.JoinDate.Time,
 		ManagerID:      utils.UUIDToString(e.ManagerID),
 		UserID:         utils.UUIDToString(e.UserID),

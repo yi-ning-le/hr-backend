@@ -47,6 +47,42 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 		return nil, err
 	}
 
+	// 3. Auto-create Employee record to link with User
+	// Use username as placeholder for First/Last name if not provided (RegisterInput might need expansion later)
+	// For now, split username or just use it.
+	firstName := input.Username
+	lastName := "User"
+
+	// Create timestamp for join date (now)
+	now := pgtype.Timestamptz{
+		Time:  utils.Now(),
+		Valid: true,
+	}
+
+	empParams := repository.CreateEmployeeParams{
+		FirstName:      firstName,
+		LastName:       lastName,
+		Email:          input.Email,
+		Phone:          "", // Optional
+		Department:     "Unassigned",
+		Position:       "New Hire",
+		Status:         "Active",
+		EmploymentType: "FullTime",
+		JoinDate:       now,
+		UserID:         user.ID, // Link to the new user!
+		ManagerID:      pgtype.UUID{Valid: false},
+	}
+
+	_, err = s.repo.CreateEmployee(ctx, empParams)
+	if err != nil {
+		// Log error but don't fail registration?
+		// Or fail it so user tries again?
+		// Better to fail so we don't end up with unlinked users.
+		// In a real app, we'd roll back the User creation (transaction).
+		// For now, return error.
+		return nil, errors.New("failed to create linked employee record: " + err.Error())
+	}
+
 	return &model.User{
 		ID:        utils.UUIDToString(user.ID),
 		Username:  user.Username,

@@ -117,29 +117,36 @@ SELECT * FROM users WHERE id = $1 LIMIT 1;
 
 -- name: CreateEmployee :one
 INSERT INTO employees (
-  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id
+  first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, employee_type
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
 RETURNING *;
+
+-- name: CheckIsHR :one
+SELECT employee_type = 'HR' as is_hr FROM employees WHERE id = $1 LIMIT 1;
 
 -- name: GetEmployee :one
 SELECT * FROM employees
 WHERE id = $1 LIMIT 1;
 
 -- name: ListEmployees :many
-SELECT * FROM employees
-WHERE (sqlc.narg('status')::varchar IS NULL OR status = sqlc.narg('status'))
-  AND (sqlc.narg('department')::varchar IS NULL OR department = sqlc.narg('department'))
-  AND (sqlc.narg('search')::varchar IS NULL OR first_name ILIKE '%' || sqlc.narg('search') || '%' OR last_name ILIKE '%' || sqlc.narg('search') || '%' OR email ILIKE '%' || sqlc.narg('search') || '%')
-ORDER BY created_at DESC
+SELECT e.* FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE (sqlc.narg('status')::varchar IS NULL OR e.status = sqlc.narg('status'))
+  AND (sqlc.narg('department')::varchar IS NULL OR e.department = sqlc.narg('department'))
+  AND (sqlc.narg('search')::varchar IS NULL OR e.first_name ILIKE '%' || sqlc.narg('search') || '%' OR e.last_name ILIKE '%' || sqlc.narg('search') || '%' OR e.email ILIKE '%' || sqlc.narg('search') || '%')
+  AND u.is_admin = false
+ORDER BY e.created_at DESC
 LIMIT @limit_val OFFSET @offset_val;
 
 -- name: CountEmployees :one
-SELECT COUNT(*) FROM employees
-WHERE (sqlc.narg('status')::varchar IS NULL OR status = sqlc.narg('status'))
-  AND (sqlc.narg('department')::varchar IS NULL OR department = sqlc.narg('department'))
-  AND (sqlc.narg('search')::varchar IS NULL OR first_name ILIKE '%' || sqlc.narg('search') || '%' OR last_name ILIKE '%' || sqlc.narg('search') || '%' OR email ILIKE '%' || sqlc.narg('search') || '%');
+SELECT COUNT(*) FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE (sqlc.narg('status')::varchar IS NULL OR e.status = sqlc.narg('status'))
+  AND (sqlc.narg('department')::varchar IS NULL OR e.department = sqlc.narg('department'))
+  AND (sqlc.narg('search')::varchar IS NULL OR e.first_name ILIKE '%' || sqlc.narg('search') || '%' OR e.last_name ILIKE '%' || sqlc.narg('search') || '%' OR e.email ILIKE '%' || sqlc.narg('search') || '%')
+  AND u.is_admin = false;
 
 -- name: UpdateEmployee :one
 UPDATE employees
@@ -226,6 +233,8 @@ DELETE FROM recruitment_roles WHERE employee_id = $1;
 SELECT e.id, e.first_name, e.last_name, e.department, e.phone
 FROM recruitment_roles rr
 JOIN employees e ON rr.employee_id = e.id
+JOIN users u ON e.user_id = u.id
+WHERE u.is_admin = false
 ORDER BY e.first_name;
 
 -- name: GetEmployeeByUserID :one
@@ -262,3 +271,31 @@ SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
+
+-- name: UpdateInterviewNote :one
+UPDATE interviews
+SET notes = $2,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
+-- HR Role queries
+
+-- name: AssignHRRole :exec
+UPDATE employees
+SET employee_type = 'HR',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
+-- name: RevokeHRRole :exec
+UPDATE employees
+SET employee_type = 'EMPLOYEE',
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
+-- name: ListHRs :many
+SELECT e.id, e.first_name, e.last_name, e.department, e.phone
+FROM employees e
+JOIN users u ON e.user_id = u.id
+WHERE e.employee_type = 'HR' AND u.is_admin = false
+ORDER BY e.first_name;

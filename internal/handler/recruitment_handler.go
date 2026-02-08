@@ -49,6 +49,7 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 			IsAdmin:       isAdmin,
 			IsRecruiter:   false,
 			IsInterviewer: false,
+			IsHR:          false,
 		})
 		return
 	}
@@ -61,10 +62,14 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	interviewCount, err := h.queries.GetActiveInterviewCount(ctx, employee.ID)
 	isInterviewer := err == nil && interviewCount > 0
 
+	// Check if HR
+	isHR := employee.EmployeeType == "HR"
+
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
 		IsAdmin:       isAdmin,
 		IsRecruiter:   isRecruiter,
 		IsInterviewer: isInterviewer,
+		IsHR:          isHR,
 	})
 }
 
@@ -141,6 +146,79 @@ func (h *RecruitmentHandler) RevokeRecruiter(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Recruiter role revoked"})
 }
 
+// GetHRs lists all HR employees (Admin only)
+func (h *RecruitmentHandler) GetHRs(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	hrs, err := h.queries.ListHRs(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list HRs"})
+		return
+	}
+
+	result := make([]model.HREmployee, len(hrs))
+	for i, hr := range hrs {
+		result[i] = model.HREmployee{
+			EmployeeID: uuidToString(hr.ID),
+			FirstName:  hr.FirstName,
+			LastName:   hr.LastName,
+			Department: hr.Department,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// AssignHR assigns HR role to an employee (Admin only)
+func (h *RecruitmentHandler) AssignHR(c *gin.Context) {
+	var input struct {
+		EmployeeID string `json:"employeeId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	employeeID, err := parseUUID(input.EmployeeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.queries.AssignHRRole(ctx, employeeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign HR role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "HR role assigned"})
+}
+
+// RevokeHR removes HR role from an employee (Admin only)
+func (h *RecruitmentHandler) RevokeHR(c *gin.Context) {
+	var input struct {
+		EmployeeID string `json:"employeeId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	employeeID, err := parseUUID(input.EmployeeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.queries.RevokeHRRole(ctx, employeeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke HR role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "HR role revoked"})
+}
+
 // TransferInterview transfers an interview to another employee (Recruiter only)
 func (h *RecruitmentHandler) TransferInterview(c *gin.Context) {
 	interviewIDStr := c.Param("id")
@@ -173,6 +251,176 @@ func (h *RecruitmentHandler) TransferInterview(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Interview transferred"})
+}
+
+// CreateInterview assigns a candidate to an interviewer (creates an interview)
+func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
+	var input model.CreateInterviewInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	candidateID, err := parseUUID(input.CandidateID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid candidate ID"})
+		return
+	}
+
+	interviewerID, err := parseUUID(input.InterviewerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interviewer ID"})
+		return
+	}
+
+	jobID, err := parseUUID(input.JobID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid job ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Create interview
+	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{
+		CandidateID:   candidateID,
+		InterviewerID: interviewerID,
+		JobID:         jobID,
+		ScheduledTime: pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
+		Status:        "PENDING",
+		Notes:         pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
+		return
+	}
+
+	c.JSON(http.StatusCreated, model.Interview{
+		ID:            uuidToString(interview.ID),
+		CandidateID:   uuidToString(interview.CandidateID),
+		InterviewerID: uuidToString(interview.InterviewerID),
+		JobID:         uuidToString(interview.JobID),
+		ScheduledTime: interview.ScheduledTime.Time,
+		Status:        interview.Status,
+		Notes:         interview.Notes.String,
+		CreatedAt:     interview.CreatedAt.Time,
+	})
+}
+
+// GetMyInterviews returns interviews assigned to the current employee
+func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userID, err := parseUUID(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Get employee ID
+	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee profile not found"})
+		return
+	}
+
+	// List interviews
+	interviews, err := h.queries.ListInterviewsByInterviewer(ctx, employee.ID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list interviews"})
+		return
+	}
+
+	result := make([]model.Interview, len(interviews))
+	for i, interview := range interviews {
+		result[i] = model.Interview{
+			ID:            uuidToString(interview.ID),
+			CandidateID:   uuidToString(interview.CandidateID),
+			InterviewerID: uuidToString(interview.InterviewerID),
+			JobID:         uuidToString(interview.JobID),
+			ScheduledTime: interview.ScheduledTime.Time,
+			Status:        interview.Status,
+			Notes:         interview.Notes.String,
+			CreatedAt:     interview.CreatedAt.Time,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// GetInterview returns a specific interview detail
+func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
+	interviewIDStr := c.Param("id")
+	interviewID, err := parseUUID(interviewIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	interview, err := h.queries.GetInterview(ctx, interviewID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Interview{
+		ID:            uuidToString(interview.ID),
+		CandidateID:   uuidToString(interview.CandidateID),
+		InterviewerID: uuidToString(interview.InterviewerID),
+		JobID:         uuidToString(interview.JobID),
+		ScheduledTime: interview.ScheduledTime.Time,
+		Status:        interview.Status,
+		Notes:         interview.Notes.String,
+		CreatedAt:     interview.CreatedAt.Time,
+	})
+}
+
+// UpdateInterviewNotes updates the notes for an interview
+func (h *RecruitmentHandler) UpdateInterviewNotes(c *gin.Context) {
+	interviewIDStr := c.Param("id")
+	interviewID, err := parseUUID(interviewIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
+		return
+	}
+
+	var input model.UpdateInterviewNotesInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check if interview exists (optional, update will fail if not found but explicit check is nicer)
+	// For now direct update relies on row count or error, sqlc 'one' returns error if not found.
+
+	interview, err := h.queries.UpdateInterviewNote(ctx, repository.UpdateInterviewNoteParams{
+		ID:    interviewID,
+		Notes: pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview notes"})
+		return
+	}
+
+	c.JSON(http.StatusOK, model.Interview{
+		ID:            uuidToString(interview.ID),
+		CandidateID:   uuidToString(interview.CandidateID),
+		InterviewerID: uuidToString(interview.InterviewerID),
+		JobID:         uuidToString(interview.JobID),
+		ScheduledTime: interview.ScheduledTime.Time,
+		Status:        interview.Status,
+		Notes:         interview.Notes.String,
+		CreatedAt:     interview.CreatedAt.Time,
+	})
 }
 
 // Helper functions

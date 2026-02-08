@@ -66,6 +66,11 @@ func TestCreateEmployeeHandler(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	mockRepo := &mocks.MockQuerier{
+		CreateUserFunc: func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+			return repository.User{
+				ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+			}, nil
+		},
 		CreateEmployeeFunc: func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
 			return repository.Employee{
 				ID:             pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
@@ -77,7 +82,9 @@ func TestCreateEmployeeHandler(t *testing.T) {
 				Position:       arg.Position,
 				Status:         arg.Status,
 				EmploymentType: arg.EmploymentType,
+				EmployeeType:   arg.EmployeeType,
 				JoinDate:       arg.JoinDate,
+				UserID:         arg.UserID,
 			}, nil
 		},
 	}

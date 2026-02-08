@@ -54,6 +54,8 @@ type Employee struct {
 	UserID         pgtype.UUID        `json:"user_id"`
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
+	// HR, EMPLOYEE
+	EmployeeType string `json:"employee_type"`
 }
 
 type Interview struct {

@@ -91,15 +91,23 @@ func main() {
 		api.DELETE("/candidate-statuses/:id", candidateStatusHandler.DeleteStatus)
 		api.PATCH("/candidate-statuses/reorder", candidateStatusHandler.ReorderStatuses)
 
-		// Employee Routes
+		// Employee Routes (Read - All authenticated users)
 		api.GET("/employees", employeeHandler.ListEmployees)
-		api.POST("/employees", employeeHandler.CreateEmployee)
 		api.GET("/employees/:id", employeeHandler.GetEmployee)
-		api.PUT("/employees/:id", employeeHandler.UpdateEmployee)
-		api.DELETE("/employees/:id", employeeHandler.DeleteEmployee)
 
 		// Recruitment Role Routes
 		api.GET("/recruitment/role", recruitmentHandler.GetMyRole)
+	}
+
+	// HR-only Employee Routes (Create, Update, Delete)
+	hrQuerier := middleware.NewQueriesAdapter(repo)
+	hrApi := r.Group("/")
+	hrApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	hrApi.Use(middleware.RequireHR(hrQuerier))
+	{
+		hrApi.POST("/employees", employeeHandler.CreateEmployee)
+		hrApi.PUT("/employees/:id", employeeHandler.UpdateEmployee)
+		hrApi.DELETE("/employees/:id", employeeHandler.DeleteEmployee)
 	}
 
 	// Admin only Recruitment Routes
@@ -110,6 +118,10 @@ func main() {
 		adminApi.GET("/recruiters", recruitmentHandler.GetRecruiters)
 		adminApi.POST("/recruiters", recruitmentHandler.AssignRecruiter)
 		adminApi.DELETE("/recruiters", recruitmentHandler.RevokeRecruiter)
+		// HR management routes
+		adminApi.GET("/hrs", recruitmentHandler.GetHRs)
+		adminApi.POST("/hrs", recruitmentHandler.AssignHR)
+		adminApi.DELETE("/hrs", recruitmentHandler.RevokeHR)
 	}
 
 	// Recruiter only Routes
@@ -117,7 +129,20 @@ func main() {
 	recruiterApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	recruiterApi.Use(middleware.RequireRecruiter(repo))
 	{
+		recruiterApi.POST("/interviews", recruitmentHandler.CreateInterview)
 		recruiterApi.POST("/interviews/:id/transfer", recruitmentHandler.TransferInterview)
+	}
+
+	// Interviewer Routes (Employee access)
+	// Technically any employee can be an interviewer, so we just check auth.
+	// We could add a RequireInterviewer middleware if we wanted to be strict,
+	// but GetMyInterviews implicitly filters by user.
+	interviewApi := r.Group("/recruitment")
+	interviewApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	{
+		interviewApi.GET("/interviews/me", recruitmentHandler.GetMyInterviews)
+		interviewApi.GET("/interviews/:id", recruitmentHandler.GetInterview)
+		interviewApi.PATCH("/interviews/:id/notes", recruitmentHandler.UpdateInterviewNotes)
 	}
 
 	// Health Check

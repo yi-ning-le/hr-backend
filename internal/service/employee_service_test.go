@@ -13,8 +13,20 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func TestCreateEmployee(t *testing.T) {
+func TestCreateEmployee_AutoCreatesUser(t *testing.T) {
+	var createdUserParams repository.CreateUserParams
+	createUserCalled := false
+
 	mockRepo := &mocks.MockQuerier{
+		CreateUserFunc: func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+			createUserCalled = true
+			createdUserParams = arg
+			return repository.User{
+				ID:       pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+				Username: arg.Username,
+				Email:    arg.Email,
+			}, nil
+		},
 		CreateEmployeeFunc: func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
 			return repository.Employee{
 				ID:             pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
@@ -26,7 +38,9 @@ func TestCreateEmployee(t *testing.T) {
 				Position:       arg.Position,
 				Status:         arg.Status,
 				EmploymentType: arg.EmploymentType,
+				EmployeeType:   arg.EmployeeType,
 				JoinDate:       arg.JoinDate,
+				UserID:         arg.UserID,
 			}, nil
 		},
 	}
@@ -48,6 +62,24 @@ func TestCreateEmployee(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
+	// Verify user was created automatically
+	if !createUserCalled {
+		t.Fatal("expected CreateUser to be called, but it was not")
+	}
+
+	// Verify user params: username = email, default password hash
+	if createdUserParams.Username != input.Email {
+		t.Errorf("expected username %s, got %s", input.Email, createdUserParams.Username)
+	}
+	if createdUserParams.Email != input.Email {
+		t.Errorf("expected email %s, got %s", input.Email, createdUserParams.Email)
+	}
+	// Password should be hashed (not empty)
+	if createdUserParams.PasswordHash == "" {
+		t.Error("expected password hash to be set")
+	}
+
+	// Verify employee was created with correct user link
 	if employee.FirstName != input.FirstName {
 		t.Errorf("expected firstName %s, got %s", input.FirstName, employee.FirstName)
 	}
@@ -56,6 +88,48 @@ func TestCreateEmployee(t *testing.T) {
 	}
 	if employee.EmploymentType != "FullTime" {
 		t.Errorf("expected default employmentType FullTime, got %s", employee.EmploymentType)
+	}
+	// Default employee type should be EMPLOYEE
+	if employee.EmployeeType != "EMPLOYEE" {
+		t.Errorf("expected default employeeType EMPLOYEE, got %s", employee.EmployeeType)
+	}
+}
+
+func TestCreateEmployee_HR(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{
+		CreateUserFunc: func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+			return repository.User{
+				ID: pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
+			}, nil
+		},
+		CreateEmployeeFunc: func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
+			return repository.Employee{
+				ID:           pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
+				EmployeeType: arg.EmployeeType,
+			}, nil
+		},
+	}
+
+	svc := service.NewEmployeeService(mockRepo)
+
+	input := model.EmployeeInput{
+		FirstName:    "李",
+		LastName:     "四",
+		Email:        "lisi@example.com",
+		Phone:        "13800138001",
+		Department:   "人力资源部",
+		Position:     "HR",
+		JoinDate:     time.Now(),
+		EmployeeType: "HR",
+	}
+
+	employee, err := svc.CreateEmployee(context.Background(), input)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if employee.EmployeeType != "HR" {
+		t.Errorf("expected employeeType HR, got %s", employee.EmployeeType)
 	}
 }
 

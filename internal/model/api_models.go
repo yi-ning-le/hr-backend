@@ -98,6 +98,7 @@ type Employee struct {
 	Position       string    `json:"position"`
 	Status         string    `json:"status"`
 	EmploymentType string    `json:"employmentType"`
+	EmployeeType   string    `json:"employeeType"` // HR, EMPLOYEE
 	JoinDate       time.Time `json:"joinDate"`
 	ManagerID      string    `json:"managerId,omitempty"`
 	UserID         string    `json:"userId,omitempty"`
@@ -112,6 +113,7 @@ type EmployeeInput struct {
 	Position       string    `json:"position" binding:"required"`
 	Status         string    `json:"status"`
 	EmploymentType string    `json:"employmentType"`
+	EmployeeType   string    `json:"employeeType"` // HR, EMPLOYEE (default)
 	JoinDate       time.Time `json:"joinDate" binding:"required"`
 	ManagerID      string    `json:"managerId"`
 	UserID         string    `json:"userId"`
@@ -122,4 +124,29 @@ type EmployeeListResult struct {
 	Total     int64      `json:"total"`
 	Page      int        `json:"page"`
 	Limit     int        `json:"limit"`
+}
+
+// --- Interview Models ---
+
+type Interview struct {
+	ID            string    `json:"id"`
+	CandidateID   string    `json:"candidateId"`
+	InterviewerID string    `json:"interviewerId"`
+	JobID         string    `json:"jobId"`
+	ScheduledTime time.Time `json:"scheduledTime"`
+	Status        string    `json:"status"`
+	Notes         string    `json:"notes,omitempty"`
+	CreatedAt     time.Time `json:"createdAt"`
+}
+
+type CreateInterviewInput struct {
+	CandidateID   string    `json:"candidateId" binding:"required"`
+	InterviewerID string    `json:"interviewerId" binding:"required"`
+	JobID         string    `json:"jobId" binding:"required"` // Can be derived from candidate, but explicit is okay
+	ScheduledTime time.Time `json:"scheduledTime" binding:"required"`
+	Notes         string    `json:"notes"`
+}
+
+type UpdateInterviewNotesInput struct {
+	Notes string `json:"notes" binding:"required"`
 }

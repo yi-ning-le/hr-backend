@@ -58,6 +58,13 @@ type MockQuerier struct {
 	ListInterviewsByInterviewerFunc func(ctx context.Context, interviewerID pgtype.UUID) ([]repository.Interview, error)
 	TransferInterviewFunc           func(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error)
 	UpdateInterviewStatusFunc       func(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error)
+	UpdateInterviewNoteFunc         func(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error)
+
+	// HR role check
+	CheckIsHRFunc    func(ctx context.Context, id pgtype.UUID) (bool, error)
+	AssignHRRoleFunc func(ctx context.Context, id pgtype.UUID) error
+	RevokeHRRoleFunc func(ctx context.Context, id pgtype.UUID) error
+	ListHRsFunc      func(ctx context.Context) ([]repository.ListHRsRow, error)
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -268,4 +275,42 @@ func (m *MockQuerier) UpdateInterviewStatus(ctx context.Context, arg repository.
 		return m.UpdateInterviewStatusFunc(ctx, arg)
 	}
 	return repository.Interview{}, nil
+}
+func (m *MockQuerier) UpdateInterviewNote(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error) {
+	if m.UpdateInterviewNoteFunc != nil {
+		return m.UpdateInterviewNoteFunc(ctx, arg)
+	}
+	return repository.Interview{}, nil
+}
+
+// CheckIsHR method for HR role check
+func (m *MockQuerier) CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error) {
+	if m.CheckIsHRFunc != nil {
+		return m.CheckIsHRFunc(ctx, id)
+	}
+	return false, nil
+}
+
+// AssignHRRole assigns HR role to an employee
+func (m *MockQuerier) AssignHRRole(ctx context.Context, id pgtype.UUID) error {
+	if m.AssignHRRoleFunc != nil {
+		return m.AssignHRRoleFunc(ctx, id)
+	}
+	return nil
+}
+
+// RevokeHRRole revokes HR role from an employee
+func (m *MockQuerier) RevokeHRRole(ctx context.Context, id pgtype.UUID) error {
+	if m.RevokeHRRoleFunc != nil {
+		return m.RevokeHRRoleFunc(ctx, id)
+	}
+	return nil
+}
+
+// ListHRs returns all HR employees
+func (m *MockQuerier) ListHRs(ctx context.Context) ([]repository.ListHRsRow, error) {
+	if m.ListHRsFunc != nil {
+		return m.ListHRsFunc(ctx)
+	}
+	return nil, nil
 }
