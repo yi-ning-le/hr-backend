@@ -23,7 +23,10 @@ func NewCandidateHandler(s *service.CandidateService) *CandidateHandler {
 
 func (h *CandidateHandler) ListCandidates(c *gin.Context) {
 	jobID := c.Query("jobId")
-	candidates, err := h.service.ListCandidates(c.Request.Context(), jobID)
+	reviewerID := c.Query("reviewerId")
+	reviewStatus := c.Query("reviewStatus")
+
+	candidates, err := h.service.ListCandidates(c.Request.Context(), jobID, reviewerID, reviewStatus)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -71,6 +74,43 @@ func (h *CandidateHandler) UpdateCandidate(c *gin.Context) {
 		return
 	}
 
+	c.JSON(http.StatusOK, candidate)
+}
+
+func (h *CandidateHandler) AssignReviewer(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		ReviewerID string `json:"reviewerId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	candidate, err := h.service.AssignReviewer(c.Request.Context(), id, req.ReviewerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, candidate)
+}
+
+func (h *CandidateHandler) SubmitReview(c *gin.Context) {
+	id := c.Param("id")
+	var req struct {
+		ReviewStatus string `json:"reviewStatus" binding:"required"`
+		ReviewNote   string `json:"reviewNote"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	candidate, err := h.service.SubmitReview(c.Request.Context(), id, req.ReviewStatus, req.ReviewNote)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 	c.JSON(http.StatusOK, candidate)
 }
 

@@ -15,9 +15,11 @@ type MockQuerier struct {
 	UpdateJobStatusFunc func(ctx context.Context, arg repository.UpdateJobStatusParams) (repository.Job, error)
 	DeleteJobFunc       func(ctx context.Context, id pgtype.UUID) error
 
+	AssignReviewerFunc        func(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error)
+	SubmitReviewFunc          func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error)
 	CreateCandidateFunc       func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error)
 	GetCandidateFunc          func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error)
-	ListCandidatesFunc        func(ctx context.Context, arg pgtype.UUID) ([]repository.ListCandidatesRow, error)
+	ListCandidatesFunc        func(ctx context.Context, arg repository.ListCandidatesParams) ([]repository.ListCandidatesRow, error)
 	UpdateCandidateFunc       func(ctx context.Context, arg repository.UpdateCandidateParams) (repository.Candidate, error)
 	UpdateCandidateStatusFunc func(ctx context.Context, arg repository.UpdateCandidateStatusParams) (repository.Candidate, error)
 	UpdateCandidateNoteFunc   func(ctx context.Context, arg repository.UpdateCandidateNoteParams) (repository.Candidate, error)
@@ -92,7 +94,7 @@ func (m *MockQuerier) CreateCandidate(ctx context.Context, arg repository.Create
 func (m *MockQuerier) GetCandidate(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
 	return m.GetCandidateFunc(ctx, id)
 }
-func (m *MockQuerier) ListCandidates(ctx context.Context, arg pgtype.UUID) ([]repository.ListCandidatesRow, error) {
+func (m *MockQuerier) ListCandidates(ctx context.Context, arg repository.ListCandidatesParams) ([]repository.ListCandidatesRow, error) {
 	return m.ListCandidatesFunc(ctx, arg)
 }
 func (m *MockQuerier) UpdateCandidate(ctx context.Context, arg repository.UpdateCandidateParams) (repository.Candidate, error) {
@@ -109,6 +111,14 @@ func (m *MockQuerier) UpdateCandidateResume(ctx context.Context, arg repository.
 }
 func (m *MockQuerier) DeleteCandidate(ctx context.Context, id pgtype.UUID) error {
 	return m.DeleteCandidateFunc(ctx, id)
+}
+
+func (m *MockQuerier) AssignReviewer(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error) {
+	return m.AssignReviewerFunc(ctx, arg)
+}
+
+func (m *MockQuerier) SubmitReview(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+	return m.SubmitReviewFunc(ctx, arg)
 }
 
 func (m *MockQuerier) CreateUser(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {

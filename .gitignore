@@ -42,5 +42,7 @@ logs/
 *.sqlite
 
 GEMINI.md
+CLAUDE.md
+hr-backend
 uploads/
 .gemini/

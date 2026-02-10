@@ -14,6 +14,7 @@ type Querier interface {
 	// HR Role queries
 	AssignHRRole(ctx context.Context, id pgtype.UUID) error
 	AssignRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
+	AssignReviewer(ctx context.Context, arg AssignReviewerParams) (AssignReviewerRow, error)
 	// Recruitment Role queries
 	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
@@ -43,7 +44,7 @@ type Querier interface {
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	// Candidate Status queries
 	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
-	ListCandidates(ctx context.Context, dollar_1 pgtype.UUID) ([]ListCandidatesRow, error)
+	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)
 	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
 	ListHRs(ctx context.Context) ([]ListHRsRow, error)
 	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
@@ -51,6 +52,7 @@ type Querier interface {
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
 	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
+	SubmitReview(ctx context.Context, arg SubmitReviewParams) (SubmitReviewRow, error)
 	TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error)
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)
 	UpdateCandidateNote(ctx context.Context, arg UpdateCandidateNoteParams) (Candidate, error)

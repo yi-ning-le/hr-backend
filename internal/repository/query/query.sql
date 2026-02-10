@@ -56,7 +56,9 @@ WHERE c.id = $1 LIMIT 1;
 SELECT c.*, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
-WHERE ($1::uuid IS NULL OR c.applied_job_id = $1)
+WHERE (sqlc.narg('job_id')::uuid IS NULL OR c.applied_job_id = sqlc.narg('job_id'))
+  AND (sqlc.narg('reviewer_id')::uuid IS NULL OR c.reviewer_id = sqlc.narg('reviewer_id'))
+  AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
 ORDER BY c.applied_at DESC;
 
 -- name: UpdateCandidate :one
@@ -97,6 +99,24 @@ SET resume_url = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
+
+-- name: AssignReviewer :one
+UPDATE candidates c
+SET reviewer_id = $2,
+    review_status = 'pending',
+    updated_at = CURRENT_TIMESTAMP
+FROM jobs j
+WHERE c.id = $1 AND c.applied_job_id = j.id
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
+
+-- name: SubmitReview :one
+UPDATE candidates c
+SET review_status = $2,
+    review_note = $3,
+    updated_at = CURRENT_TIMESTAMP
+FROM jobs j
+WHERE c.id = $1 AND c.applied_job_id = j.id
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
 
 -- name: DeleteCandidate :exec
 DELETE FROM candidates

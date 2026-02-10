@@ -41,6 +41,9 @@ type Candidate struct {
 	Status          string    `json:"status"`
 	Note            string    `json:"note,omitempty"`
 	AppliedAt       time.Time `json:"appliedAt"`
+	ReviewerID      string    `json:"reviewerId,omitempty"`
+	ReviewStatus    string    `json:"reviewStatus,omitempty"`
+	ReviewNote      string    `json:"reviewNote,omitempty"`
 }
 
 // CandidateInput matches the CandidateInput schema
@@ -58,6 +61,7 @@ type CandidateInput struct {
 	Status          string    `json:"status"` // Default new
 	Note            string    `json:"note"`
 	AppliedAt       time.Time `json:"appliedAt" binding:"required"`
+	ReviewerID      string    `json:"reviewerId"`
 }
 
 // --- Auth Models ---

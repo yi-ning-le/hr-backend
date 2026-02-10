@@ -49,26 +49,37 @@ func (s *CandidateService) CreateCandidate(ctx context.Context, input model.Cand
 		return nil, err
 	}
 
-	// We need to fetch the job title to complete the return model,
-	// but CreateCandidate returns the candidate row which doesn't have the title.
-	// We can either fetch the job separately or just use the input job title (if we trust it or if it's optional).
-	// The generated query `GetCandidate` joins with jobs. Let's use that to return the full object.
 	return s.GetCandidate(ctx, utils.UUIDToString(candidate.ID))
 }
 
-func (s *CandidateService) ListCandidates(ctx context.Context, jobIDFilter string) ([]model.Candidate, error) {
-	var filterUUID pgtype.UUID
-	if jobIDFilter != "" {
-		var err error
-		filterUUID, err = utils.StringToUUID(jobIDFilter)
-		if err != nil {
-			return nil, err // Or ignore filter? API should probably validation error.
-		}
-	} else {
-		filterUUID.Valid = false // Null UUID for "all"
+func (s *CandidateService) ListCandidates(ctx context.Context, jobIDFilter string, reviewerIDFilter string, reviewStatusFilter string) ([]model.Candidate, error) {
+	params := repository.ListCandidatesParams{
+		JobID:        pgtype.UUID{Valid: false},
+		ReviewerID:   pgtype.UUID{Valid: false},
+		ReviewStatus: pgtype.Text{Valid: false},
 	}
 
-	rows, err := s.repo.ListCandidates(ctx, filterUUID)
+	if jobIDFilter != "" {
+		uuid, err := utils.StringToUUID(jobIDFilter)
+		if err != nil {
+			return nil, err
+		}
+		params.JobID = uuid
+	}
+
+	if reviewerIDFilter != "" {
+		uuid, err := utils.StringToUUID(reviewerIDFilter)
+		if err != nil {
+			return nil, err
+		}
+		params.ReviewerID = uuid
+	}
+
+	if reviewStatusFilter != "" {
+		params.ReviewStatus = pgtype.Text{String: reviewStatusFilter, Valid: true}
+	}
+
+	rows, err := s.repo.ListCandidates(ctx, params)
 	if err != nil {
 		return nil, err
 	}
@@ -78,6 +89,45 @@ func (s *CandidateService) ListCandidates(ctx context.Context, jobIDFilter strin
 		result[i] = mapCandidateRowToModel(r)
 	}
 	return result, nil
+}
+
+func (s *CandidateService) AssignReviewer(ctx context.Context, id string, reviewerID string) (*model.Candidate, error) {
+	uuid, err := utils.StringToUUID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	reviewerUUID, err := utils.StringToUUID(reviewerID)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := s.repo.AssignReviewer(ctx, repository.AssignReviewerParams{
+		ID:         uuid,
+		ReviewerID: reviewerUUID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return mapAssignReviewerRowToModel(row), nil
+}
+
+func (s *CandidateService) SubmitReview(ctx context.Context, id string, status string, note string) (*model.Candidate, error) {
+	uuid, err := utils.StringToUUID(id)
+	if err != nil {
+		return nil, err
+	}
+
+	row, err := s.repo.SubmitReview(ctx, repository.SubmitReviewParams{
+		ID:           uuid,
+		ReviewStatus: pgtype.Text{String: status, Valid: true},
+		ReviewNote:   pgtype.Text{String: note, Valid: true},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return mapSubmitReviewRowToModel(row), nil
 }
 
 func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.Candidate, error) {
@@ -91,7 +141,6 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		return nil, err
 	}
 
-	// GetCandidate returns a Row with joined fields
 	return &model.Candidate{
 		ID:              utils.UUIDToString(row.ID),
 		Name:            row.Name,
@@ -107,6 +156,9 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		Status:          row.Status,
 		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
+		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewStatus:    row.ReviewStatus.String,
+		ReviewNote:      row.ReviewNote.String,
 	}, nil
 }
 
@@ -217,5 +269,52 @@ func mapCandidateRowToModel(row repository.ListCandidatesRow) model.Candidate {
 		Status:          row.Status,
 		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
+		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewStatus:    row.ReviewStatus.String,
+		ReviewNote:      row.ReviewNote.String,
+	}
+}
+
+func mapAssignReviewerRowToModel(row repository.AssignReviewerRow) *model.Candidate {
+	return &model.Candidate{
+		ID:              utils.UUIDToString(row.ID),
+		Name:            row.Name,
+		Avatar:          row.Avatar.String,
+		Email:           row.Email,
+		Phone:           row.Phone,
+		ExperienceYears: int(row.ExperienceYears),
+		Education:       row.Education,
+		AppliedJobID:    utils.UUIDToString(row.AppliedJobID),
+		AppliedJobTitle: row.AppliedJobTitle,
+		Channel:         row.Channel,
+		ResumeURL:       row.ResumeUrl,
+		Status:          row.Status,
+		Note:            row.Note.String,
+		AppliedAt:       row.AppliedAt.Time,
+		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewStatus:    row.ReviewStatus.String,
+		ReviewNote:      row.ReviewNote.String,
+	}
+}
+
+func mapSubmitReviewRowToModel(row repository.SubmitReviewRow) *model.Candidate {
+	return &model.Candidate{
+		ID:              utils.UUIDToString(row.ID),
+		Name:            row.Name,
+		Avatar:          row.Avatar.String,
+		Email:           row.Email,
+		Phone:           row.Phone,
+		ExperienceYears: int(row.ExperienceYears),
+		Education:       row.Education,
+		AppliedJobID:    utils.UUIDToString(row.AppliedJobID),
+		AppliedJobTitle: row.AppliedJobTitle,
+		Channel:         row.Channel,
+		ResumeURL:       row.ResumeUrl,
+		Status:          row.Status,
+		Note:            row.Note.String,
+		AppliedAt:       row.AppliedAt.Time,
+		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewStatus:    row.ReviewStatus.String,
+		ReviewNote:      row.ReviewNote.String,
 	}
 }

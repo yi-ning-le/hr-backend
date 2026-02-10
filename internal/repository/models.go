@@ -24,6 +24,9 @@ type Candidate struct {
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
+	ReviewStatus    pgtype.Text        `json:"review_status"`
+	ReviewNote      pgtype.Text        `json:"review_note"`
 }
 
 type CandidateStatus struct {

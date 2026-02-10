@@ -101,6 +101,20 @@ func (s *EmployeeService) GetEmployee(ctx context.Context, id string) (*model.Em
 	return mapEmployeeToModel(emp), nil
 }
 
+func (s *EmployeeService) GetEmployeeByUserID(ctx context.Context, userID string) (*model.Employee, error) {
+	uuid, err := utils.StringToUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	emp, err := s.repo.GetEmployeeByUserID(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	return mapEmployeeToModel(emp), nil
+}
+
 func (s *EmployeeService) ListEmployees(ctx context.Context, status, department, search string, page, limit int) (*model.EmployeeListResult, error) {
 	if limit <= 0 {
 		limit = 20

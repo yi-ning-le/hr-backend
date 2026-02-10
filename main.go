@@ -83,6 +83,8 @@ func main() {
 		api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
 		api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
 		api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
+		api.POST("/candidates/:id/assign-reviewer", candidateHandler.AssignReviewer)
+		api.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 
 		// Candidate Status Routes
 		api.GET("/candidate-statuses", candidateStatusHandler.ListStatuses)
@@ -92,6 +94,7 @@ func main() {
 		api.PATCH("/candidate-statuses/reorder", candidateStatusHandler.ReorderStatuses)
 
 		// Employee Routes (Read - All authenticated users)
+		api.GET("/employees/me", employeeHandler.GetCurrentEmployee)
 		api.GET("/employees", employeeHandler.ListEmployees)
 		api.GET("/employees/:id", employeeHandler.GetEmployee)
 

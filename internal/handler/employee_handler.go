@@ -18,6 +18,24 @@ func NewEmployeeHandler(s *service.EmployeeService) *EmployeeHandler {
 	return &EmployeeHandler{service: s}
 }
 
+// GetCurrentEmployee godoc
+// GET /employees/me
+func (h *EmployeeHandler) GetCurrentEmployee(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	employee, err := h.service.GetEmployeeByUserID(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Employee profile not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, employee)
+}
+
 // ListEmployees godoc
 // GET /employees
 func (h *EmployeeHandler) ListEmployees(c *gin.Context) {
