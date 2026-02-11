@@ -41,11 +41,6 @@ func (a *QueriesAdapter) CheckRecruiterRole(ctx context.Context, employeeID pgty
 	return a.q.CheckRecruiterRole(ctx, employeeID)
 }
 
-// GetActiveInterviewCount delegates to the underlying querier
-func (a *QueriesAdapter) GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
-	return a.q.GetActiveInterviewCount(ctx, interviewerID)
-}
-
 // RequireAdmin middleware checks if the current user is an admin
 func RequireAdmin(queries *repository.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -221,8 +216,7 @@ func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
 			return
 		}
 
-		interviewCount, err := queries.GetActiveInterviewCount(ctx, employee.ID)
-		if err != nil || interviewCount <= 0 {
+		if !employee.CanReviewResumes {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Interviewer access required"})
 			return
 		}

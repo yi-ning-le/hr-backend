@@ -2,10 +2,11 @@ package model
 
 // RecruitmentRoleResponse is returned by GET /recruitment/role
 type RecruitmentRoleResponse struct {
-	IsAdmin       bool `json:"isAdmin"`
-	IsRecruiter   bool `json:"isRecruiter"`
-	IsInterviewer bool `json:"isInterviewer"`
-	IsHR          bool `json:"isHR"`
+	IsAdmin          bool `json:"isAdmin"`
+	IsRecruiter      bool `json:"isRecruiter"`
+	IsInterviewer    bool `json:"isInterviewer"`
+	IsHR             bool `json:"isHR"`
+	CanReviewResumes bool `json:"canReviewResumes"`
 }
 
 // Recruiter represents an employee with recruiter role

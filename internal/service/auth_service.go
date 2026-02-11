@@ -12,14 +12,21 @@ import (
 )
 
 type AuthService struct {
-	repo      repository.Querier
-	jwtSecret string
+	repo       repository.Querier
+	txBeginner TxBeginner
+	jwtSecret  string
 }
 
-func NewAuthService(repo repository.Querier, jwtSecret string) *AuthService {
+func NewAuthService(repo repository.Querier, jwtSecret string, txBeginner ...TxBeginner) *AuthService {
+	var beginner TxBeginner
+	if len(txBeginner) > 0 {
+		beginner = txBeginner[0]
+	}
+
 	return &AuthService{
-		repo:      repo,
-		jwtSecret: jwtSecret,
+		repo:       repo,
+		txBeginner: beginner,
+		jwtSecret:  jwtSecret,
 	}
 }
 
@@ -30,30 +37,15 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 		return nil, err
 	}
 
-	// 2. Create User
-	// Note: We should check if username/email exists, but the DB unique constraint handles it too.
-	// For better UX, we could do a read before write. Relying on DB constraint for now.
-
 	params := repository.CreateUserParams{
 		Username:     input.Username,
 		Email:        input.Email,
 		PasswordHash: hashedPassword,
-		Avatar:       pgtype.Text{Valid: false}, // Default null
+		Avatar:       pgtype.Text{Valid: false},
 	}
 
-	user, err := s.repo.CreateUser(ctx, params)
-	if err != nil {
-		// Basic duplicate check logic (in a real app, parse pg error)
-		return nil, err
-	}
-
-	// 3. Auto-create Employee record to link with User
-	// Use username as placeholder for First/Last name if not provided (RegisterInput might need expansion later)
-	// For now, split username or just use it.
 	firstName := input.Username
 	lastName := "User"
-
-	// Create timestamp for join date (now)
 	now := pgtype.Timestamptz{
 		Time:  utils.Now(),
 		Valid: true,
@@ -69,14 +61,40 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 		Status:         "Active",
 		EmploymentType: "FullTime",
 		JoinDate:       now,
-		UserID:         user.ID, // Link to the new user!
+		UserID:         pgtype.UUID{},
 		ManagerID:      pgtype.UUID{Valid: false},
 	}
 
-	_, err = s.repo.CreateEmployee(ctx, empParams)
-	if err != nil {
-		_ = s.repo.DeleteUser(ctx, user.ID)
-		return nil, errors.New("failed to create linked employee record: " + err.Error())
+	var user repository.User
+	if s.txBeginner != nil {
+		err = runInTx(ctx, s.txBeginner, func(txQueries *repository.Queries) error {
+			createdUser, createErr := txQueries.CreateUser(ctx, params)
+			if createErr != nil {
+				return createErr
+			}
+			user = createdUser
+			empParams.UserID = createdUser.ID
+
+			if _, createEmpErr := txQueries.CreateEmployee(ctx, empParams); createEmpErr != nil {
+				return errors.New("failed to create linked employee record: " + createEmpErr.Error())
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		createdUser, createErr := s.repo.CreateUser(ctx, params)
+		if createErr != nil {
+			return nil, createErr
+		}
+		user = createdUser
+		empParams.UserID = createdUser.ID
+
+		if _, createEmpErr := s.repo.CreateEmployee(ctx, empParams); createEmpErr != nil {
+			_ = s.repo.DeleteUser(ctx, createdUser.ID)
+			return nil, errors.New("failed to create linked employee record: " + createEmpErr.Error())
+		}
 	}
 
 	return &model.User{

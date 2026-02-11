@@ -122,8 +122,6 @@ func TestRequireInterviewerOrRecruiter_AllowsRecruiter(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
-	var userIDUUID pgtype.UUID
-	userIDUUID.Scan(userIDStr)
 
 	var employeeIDUUID pgtype.UUID
 	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
@@ -176,14 +174,14 @@ func TestRequireInterviewerOrRecruiter_RejectsNonInterviewer(t *testing.T) {
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
 			return false, nil
 		},
-		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
-			return repository.Employee{ID: employeeIDUUID}, nil
-		},
 		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
 			return pgtype.UUID{}, errors.New("not recruiter")
 		},
-		GetActiveInterviewCountFunc: func(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
-			return 0, nil
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:               employeeIDUUID,
+				CanReviewResumes: false,
+			}, nil
 		},
 	}
 
@@ -206,5 +204,49 @@ func TestRequireInterviewerOrRecruiter_RejectsNonInterviewer(t *testing.T) {
 
 	if w.Code != http.StatusForbidden {
 		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestRequireInterviewerOrRecruiter_AllowsReviewerCapability(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "01010101-0101-0101-0101-010101010101"
+	var employeeIDUUID pgtype.UUID
+	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return false, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:               employeeIDUUID,
+				CanReviewResumes: true,
+			}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return pgtype.UUID{}, errors.New("not recruiter")
+		},
+	}
+
+	queries := middleware.NewQueriesAdapter(mockRepo)
+	mw := middleware.RequireInterviewerOrRecruiter(queries)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.Use(mw)
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d, body: %s", w.Code, w.Body.String())
 	}
 }

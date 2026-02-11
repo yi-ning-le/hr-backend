@@ -32,8 +32,8 @@ func main() {
 	// 4. Initialize Services
 	jobService := service.NewJobService(repo)
 	candidateService := service.NewCandidateService(repo)
-	authService := service.NewAuthService(repo, cfg.JWTSecret)
-	employeeService := service.NewEmployeeService(repo)
+	authService := service.NewAuthService(repo, cfg.JWTSecret, db.Pool)
+	employeeService := service.NewEmployeeService(repo, db.Pool)
 	candidateStatusService := service.NewCandidateStatusService(repo)
 
 	// 5. Initialize Handlers

@@ -47,10 +47,11 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	if err != nil {
 		// User has no employee record, return minimal response
 		c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
-			IsAdmin:       isAdmin,
-			IsRecruiter:   false,
-			IsInterviewer: false,
-			IsHR:          false,
+			IsAdmin:          isAdmin,
+			IsRecruiter:      false,
+			IsInterviewer:    false,
+			IsHR:             false,
+			CanReviewResumes: isAdmin,
 		})
 		return
 	}
@@ -59,18 +60,18 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	_, err = h.queries.CheckRecruiterRole(ctx, employee.ID)
 	isRecruiter := err == nil
 
-	// Check active interviews
-	interviewCount, err := h.queries.GetActiveInterviewCount(ctx, employee.ID)
-	isInterviewer := err == nil && interviewCount > 0
+	// Resume review capability is explicitly modeled on employee capability.
+	canReviewResumes := isAdmin || isRecruiter || employee.CanReviewResumes
 
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
 
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
-		IsAdmin:       isAdmin,
-		IsRecruiter:   isRecruiter,
-		IsInterviewer: isInterviewer,
-		IsHR:          isHR,
+		IsAdmin:          isAdmin,
+		IsRecruiter:      isRecruiter,
+		IsInterviewer:    employee.CanReviewResumes, // Backward compatible alias.
+		IsHR:             isHR,
+		CanReviewResumes: canReviewResumes,
 	})
 }
 
@@ -242,6 +243,11 @@ func (h *RecruitmentHandler) TransferInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	if err := h.queries.GrantResumeReviewCapability(ctx, newInterviewerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant interviewer capability"})
+		return
+	}
+
 	_, err = h.queries.TransferInterview(ctx, repository.TransferInterviewParams{
 		ID:            interviewID,
 		InterviewerID: newInterviewerID,
@@ -281,6 +287,10 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	if err := h.queries.GrantResumeReviewCapability(ctx, interviewerID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant interviewer capability"})
+		return
+	}
 
 	// Create interview
 	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{

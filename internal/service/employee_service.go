@@ -14,11 +14,20 @@ import (
 )
 
 type EmployeeService struct {
-	repo repository.Querier
+	repo       repository.Querier
+	txBeginner TxBeginner
 }
 
-func NewEmployeeService(repo repository.Querier) *EmployeeService {
-	return &EmployeeService{repo: repo}
+func NewEmployeeService(repo repository.Querier, txBeginner ...TxBeginner) *EmployeeService {
+	var beginner TxBeginner
+	if len(txBeginner) > 0 {
+		beginner = txBeginner[0]
+	}
+
+	return &EmployeeService{
+		repo:       repo,
+		txBeginner: beginner,
+	}
 }
 
 func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.EmployeeInput) (*model.Employee, error) {
@@ -54,11 +63,6 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 		Avatar:       pgtype.Text{Valid: false},
 	}
 
-	user, err := s.repo.CreateUser(ctx, userParams)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create user account: %w", err)
-	}
-
 	// 2. Parse manager ID if provided
 	var managerID pgtype.UUID
 	if input.ManagerID != "" {
@@ -81,13 +85,41 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 		EmployeeType:   employeeType,
 		JoinDate:       pgtype.Timestamptz{Time: input.JoinDate, Valid: true},
 		ManagerID:      managerID,
-		UserID:         user.ID, // Link to auto-created user
+		UserID:         pgtype.UUID{},
 	}
 
-	emp, err := s.repo.CreateEmployee(ctx, params)
-	if err != nil {
-		_ = s.repo.DeleteUser(ctx, user.ID)
-		return nil, err
+	var emp repository.Employee
+	if s.txBeginner != nil {
+		err = runInTx(ctx, s.txBeginner, func(txQueries *repository.Queries) error {
+			user, createErr := txQueries.CreateUser(ctx, userParams)
+			if createErr != nil {
+				return fmt.Errorf("failed to create user account: %w", createErr)
+			}
+
+			params.UserID = user.ID
+			createdEmployee, createEmpErr := txQueries.CreateEmployee(ctx, params)
+			if createEmpErr != nil {
+				return createEmpErr
+			}
+			emp = createdEmployee
+			return nil
+		})
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		user, createErr := s.repo.CreateUser(ctx, userParams)
+		if createErr != nil {
+			return nil, fmt.Errorf("failed to create user account: %w", createErr)
+		}
+
+		params.UserID = user.ID
+		createdEmployee, createEmpErr := s.repo.CreateEmployee(ctx, params)
+		if createEmpErr != nil {
+			_ = s.repo.DeleteUser(ctx, user.ID)
+			return nil, createEmpErr
+		}
+		emp = createdEmployee
 	}
 
 	return mapEmployeeToModel(emp), nil

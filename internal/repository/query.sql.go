@@ -300,7 +300,7 @@ INSERT INTO employees (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
 )
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type, can_review_resumes
 `
 
 type CreateEmployeeParams struct {
@@ -351,6 +351,7 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmployeeType,
+		&i.CanReviewResumes,
 	)
 	return i, err
 }
@@ -669,7 +670,7 @@ func (q *Queries) GetCandidateStatusBySlug(ctx context.Context, slug string) (Ca
 }
 
 const getEmployee = `-- name: GetEmployee :one
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type FROM employees
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type, can_review_resumes FROM employees
 WHERE id = $1 LIMIT 1
 `
 
@@ -692,12 +693,13 @@ func (q *Queries) GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, er
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmployeeType,
+		&i.CanReviewResumes,
 	)
 	return i, err
 }
 
 const getEmployeeByUserID = `-- name: GetEmployeeByUserID :one
-SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type FROM employees WHERE user_id = $1 LIMIT 1
+SELECT id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type, can_review_resumes FROM employees WHERE user_id = $1 LIMIT 1
 `
 
 func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error) {
@@ -719,6 +721,7 @@ func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmployeeType,
+		&i.CanReviewResumes,
 	)
 	return i, err
 }
@@ -805,6 +808,18 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.IsAdmin,
 	)
 	return i, err
+}
+
+const grantResumeReviewCapability = `-- name: GrantResumeReviewCapability :exec
+UPDATE employees
+SET can_review_resumes = TRUE,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+`
+
+func (q *Queries) GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, grantResumeReviewCapability, id)
+	return err
 }
 
 const listCandidateStatuses = `-- name: ListCandidateStatuses :many
@@ -940,7 +955,7 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 }
 
 const listEmployees = `-- name: ListEmployees :many
-SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.department, e.position, e.status, e.employment_type, e.join_date, e.manager_id, e.user_id, e.created_at, e.updated_at, e.employee_type FROM employees e
+SELECT e.id, e.first_name, e.last_name, e.email, e.phone, e.department, e.position, e.status, e.employment_type, e.join_date, e.manager_id, e.user_id, e.created_at, e.updated_at, e.employee_type, e.can_review_resumes FROM employees e
 JOIN users u ON e.user_id = u.id
 WHERE ($1::varchar IS NULL OR e.status = $1)
   AND ($2::varchar IS NULL OR e.department = $2)
@@ -989,6 +1004,7 @@ func (q *Queries) ListEmployees(ctx context.Context, arg ListEmployeesParams) ([
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.EmployeeType,
+			&i.CanReviewResumes,
 		); err != nil {
 			return nil, err
 		}
@@ -1528,7 +1544,7 @@ SET first_name = $2,
     user_id = $12,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type
+RETURNING id, first_name, last_name, email, phone, department, position, status, employment_type, join_date, manager_id, user_id, created_at, updated_at, employee_type, can_review_resumes
 `
 
 type UpdateEmployeeParams struct {
@@ -1578,6 +1594,7 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.EmployeeType,
+		&i.CanReviewResumes,
 	)
 	return i, err
 }

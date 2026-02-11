@@ -56,6 +56,7 @@ type MockQuerier struct {
 	CheckIsAdminFunc                func(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckRecruiterRoleFunc          func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
 	GetActiveInterviewCountFunc     func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
+	GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
 	RevokeRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
 	GetEmployeeByUserIDFunc         func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error)
@@ -261,6 +262,12 @@ func (m *MockQuerier) GetActiveInterviewCount(ctx context.Context, interviewerID
 		return m.GetActiveInterviewCountFunc(ctx, interviewerID)
 	}
 	return 0, nil
+}
+func (m *MockQuerier) GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error {
+	if m.GrantResumeReviewCapabilityFunc != nil {
+		return m.GrantResumeReviewCapabilityFunc(ctx, id)
+	}
+	return nil
 }
 func (m *MockQuerier) RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {
 	if m.RevokeRecruiterRoleFunc != nil {

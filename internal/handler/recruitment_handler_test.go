@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -100,5 +101,106 @@ func TestRevokeRecruiter(t *testing.T) {
 
 	if capturedID != employeeIDUUID {
 		t.Errorf("expected to revoke ID %v, got %v", employeeIDUUID, capturedID)
+	}
+}
+
+func TestGetMyRole_UsesExplicitReviewCapability(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "5111b81e-bd11-471a-96e0-24927f906d1e"
+
+	var employeeIDUUID pgtype.UUID
+	employeeIDUUID.Scan("6111b81e-bd11-471a-96e0-24927f906d1e")
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return false, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:               employeeIDUUID,
+				EmployeeType:     "HR",
+				CanReviewResumes: true,
+			}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return pgtype.UUID{}, errors.New("not recruiter")
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.GET("/recruitment/role", h.GetMyRole)
+
+	req, _ := http.NewRequest("GET", "/recruitment/role", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result model.RecruitmentRoleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if !result.IsInterviewer {
+		t.Errorf("expected isInterviewer=true when explicit capability is enabled")
+	}
+	if !result.CanReviewResumes {
+		t.Errorf("expected canReviewResumes=true")
+	}
+	if !result.IsHR {
+		t.Errorf("expected isHR=true")
+	}
+}
+
+func TestGetMyRole_NoEmployeeKeepsAdminCapability(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "7111b81e-bd11-471a-96e0-24927f906d1e"
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{}, errors.New("employee not found")
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.GET("/recruitment/role", h.GetMyRole)
+
+	req, _ := http.NewRequest("GET", "/recruitment/role", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+
+	var result model.RecruitmentRoleResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if !result.IsAdmin {
+		t.Errorf("expected isAdmin=true")
+	}
+	if !result.CanReviewResumes {
+		t.Errorf("expected canReviewResumes=true for admin without employee profile")
 	}
 }

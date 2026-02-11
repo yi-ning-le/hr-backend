@@ -45,6 +45,7 @@ type Querier interface {
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error
 	// Candidate Status queries
 	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
 	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)

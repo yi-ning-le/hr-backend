@@ -169,6 +169,12 @@ INSERT INTO employees (
 )
 RETURNING *;
 
+-- name: GrantResumeReviewCapability :exec
+UPDATE employees
+SET can_review_resumes = TRUE,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
+
 -- name: CheckIsHR :one
 SELECT employee_type = 'HR' as is_hr FROM employees WHERE id = $1 LIMIT 1;
 
