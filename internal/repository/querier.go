@@ -33,6 +33,7 @@ type Querier interface {
 	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
 	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
+	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
 	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)

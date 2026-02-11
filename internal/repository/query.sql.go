@@ -518,6 +518,15 @@ func (q *Queries) DeleteJob(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteUser = `-- name: DeleteUser :exec
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUser, id)
+	return err
+}
+
 const getActiveInterviewCount = `-- name: GetActiveInterviewCount :one
 SELECT COUNT(*) FROM interviews 
 WHERE interviewer_id = $1 AND status = 'PENDING'

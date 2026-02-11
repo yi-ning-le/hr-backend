@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 
 	"hr-backend/internal/repository"
@@ -38,6 +39,11 @@ func (a *QueriesAdapter) CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool
 // CheckRecruiterRole delegates to the underlying querier
 func (a *QueriesAdapter) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
 	return a.q.CheckRecruiterRole(ctx, employeeID)
+}
+
+// GetActiveInterviewCount delegates to the underlying querier
+func (a *QueriesAdapter) GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+	return a.q.GetActiveInterviewCount(ctx, interviewerID)
 }
 
 // RequireAdmin middleware checks if the current user is an admin
@@ -102,6 +108,46 @@ func RequireRecruiter(queries *repository.Queries) gin.HandlerFunc {
 	}
 }
 
+// RequireRecruiterOrAdmin middleware allows admin or recruiter access
+func RequireRecruiterOrAdmin(queries *repository.Queries) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDStr, exists := c.Get("userID")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		userID, err := parseUUID(userIDStr.(string))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			return
+		}
+
+		ctx := c.Request.Context()
+
+		isAdmin, err := queries.CheckIsAdmin(ctx, userID)
+		if err == nil && isAdmin {
+			c.Next()
+			return
+		}
+
+		employee, err := queries.GetEmployeeByUserID(ctx, userID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Current user has no linked employee profile"})
+			return
+		}
+
+		_, err = queries.CheckRecruiterRole(ctx, employee.ID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Recruiter access required"})
+			return
+		}
+
+		c.Set("employeeID", uuidToString(employee.ID))
+		c.Next()
+	}
+}
+
 // RequireHR middleware checks if the current user is an HR employee
 func RequireHR(queries *QueriesAdapter) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -138,6 +184,54 @@ func RequireHR(queries *QueriesAdapter) gin.HandlerFunc {
 	}
 }
 
+// RequireInterviewerOrRecruiter middleware checks whether the current user can access interview endpoints.
+func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIDStr, exists := c.Get("userID")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+			return
+		}
+
+		userID, err := parseUUID(userIDStr.(string))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+			return
+		}
+
+		ctx := c.Request.Context()
+
+		// Admin users always pass.
+		isAdmin, err := queries.CheckIsAdmin(ctx, userID)
+		if err == nil && isAdmin {
+			c.Next()
+			return
+		}
+
+		employee, err := queries.GetEmployeeByUserID(ctx, userID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Current user has no linked employee profile"})
+			return
+		}
+
+		// Recruiters can access interview resources for assignment and coordination.
+		if _, err := queries.CheckRecruiterRole(ctx, employee.ID); err == nil {
+			c.Set("employeeID", uuidToString(employee.ID))
+			c.Next()
+			return
+		}
+
+		interviewCount, err := queries.GetActiveInterviewCount(ctx, employee.ID)
+		if err != nil || interviewCount <= 0 {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Interviewer access required"})
+			return
+		}
+
+		c.Set("employeeID", uuidToString(employee.ID))
+		c.Next()
+	}
+}
+
 func parseUUID(s string) (pgtype.UUID, error) {
 	var uuid pgtype.UUID
 	err := uuid.Scan(s)
@@ -148,5 +242,6 @@ func uuidToString(u pgtype.UUID) string {
 	if !u.Valid {
 		return ""
 	}
-	return string(u.Bytes[:])
+	src := u.Bytes
+	return fmt.Sprintf("%x-%x-%x-%x-%x", src[0:4], src[4:6], src[6:8], src[8:10], src[10:16])
 }

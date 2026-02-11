@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -137,24 +138,42 @@ func TestGetMyInterviews(t *testing.T) {
 func TestGetInterview(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
+	userIDStr := "11111111-1111-1111-1111-111111111111"
+	employeeIDStr := "22222222-2222-2222-2222-222222222222"
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
+
+	var userID, employeeID pgtype.UUID
+	userID.Scan(userIDStr)
+	employeeID.Scan(employeeIDStr)
+
 	var interviewID pgtype.UUID
 	interviewID.Scan(interviewIDStr)
 
 	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			if id != userID {
+				return repository.Employee{}, errors.New("not found")
+			}
+			return repository.Employee{ID: employeeID, UserID: userID}, nil
+		},
 		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
 			if id != interviewID {
-				return repository.Interview{}, nil // or error
+				return repository.Interview{}, errors.New("not found")
 			}
 			return repository.Interview{
-				ID:     interviewID,
-				Status: "PENDING",
+				ID:            interviewID,
+				InterviewerID: employeeID,
+				Status:        "PENDING",
 			}, nil
 		},
 	}
 
 	h := handler.NewRecruitmentHandler(mockRepo)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
 	r.GET("/recruitment/interviews/:id", h.GetInterview)
 
 	req, _ := http.NewRequest("GET", "/recruitment/interviews/"+interviewIDStr, nil)
@@ -178,16 +197,39 @@ func TestGetInterview(t *testing.T) {
 func TestUpdateInterviewNotes(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
+	userIDStr := "11111111-1111-1111-1111-111111111111"
+	employeeIDStr := "22222222-2222-2222-2222-222222222222"
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
+
+	var userID, employeeID pgtype.UUID
+	userID.Scan(userIDStr)
+	employeeID.Scan(employeeIDStr)
+
 	var interviewID pgtype.UUID
 	interviewID.Scan(interviewIDStr)
 
 	newNotes := "Great candidate!"
 
 	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			if id != userID {
+				return repository.Employee{}, errors.New("not found")
+			}
+			return repository.Employee{ID: employeeID, UserID: userID}, nil
+		},
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
+			if id != interviewID {
+				return repository.Interview{}, errors.New("not found")
+			}
+			return repository.Interview{
+				ID:            interviewID,
+				InterviewerID: employeeID,
+				Status:        "PENDING",
+			}, nil
+		},
 		UpdateInterviewNoteFunc: func(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error) {
 			if arg.ID != interviewID {
-				return repository.Interview{}, nil
+				return repository.Interview{}, errors.New("not found")
 			}
 			return repository.Interview{
 				ID:    interviewID,
@@ -198,6 +240,10 @@ func TestUpdateInterviewNotes(t *testing.T) {
 
 	h := handler.NewRecruitmentHandler(mockRepo)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
 	r.PATCH("/recruitment/interviews/:id/notes", h.UpdateInterviewNotes)
 
 	input := model.UpdateInterviewNotesInput{
@@ -221,5 +267,103 @@ func TestUpdateInterviewNotes(t *testing.T) {
 
 	if result.Notes != newNotes {
 		t.Errorf("expected notes %s, got %s", newNotes, result.Notes)
+	}
+}
+
+func TestGetInterview_ForbiddenForNonOwner(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "11111111-1111-1111-1111-111111111111"
+	ownerEmployeeIDStr := "22222222-2222-2222-2222-222222222222"
+	requesterEmployeeIDStr := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	interviewIDStr := "33333333-3333-3333-3333-333333333333"
+
+	var userID, ownerEmployeeID, requesterEmployeeID, interviewID pgtype.UUID
+	userID.Scan(userIDStr)
+	ownerEmployeeID.Scan(ownerEmployeeIDStr)
+	requesterEmployeeID.Scan(requesterEmployeeIDStr)
+	interviewID.Scan(interviewIDStr)
+
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: requesterEmployeeID, UserID: userID}, nil
+		},
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
+			return repository.Interview{
+				ID:            interviewID,
+				InterviewerID: ownerEmployeeID,
+				Status:        "PENDING",
+			}, nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.GET("/recruitment/interviews/:id", h.GetInterview)
+
+	req, _ := http.NewRequest("GET", "/recruitment/interviews/"+interviewIDStr, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestUpdateInterviewNotes_ForbiddenForNonOwner(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "11111111-1111-1111-1111-111111111111"
+	ownerEmployeeIDStr := "22222222-2222-2222-2222-222222222222"
+	requesterEmployeeIDStr := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	interviewIDStr := "33333333-3333-3333-3333-333333333333"
+
+	var userID, ownerEmployeeID, requesterEmployeeID, interviewID pgtype.UUID
+	userID.Scan(userIDStr)
+	ownerEmployeeID.Scan(ownerEmployeeIDStr)
+	requesterEmployeeID.Scan(requesterEmployeeIDStr)
+	interviewID.Scan(interviewIDStr)
+
+	updateCalled := false
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: requesterEmployeeID, UserID: userID}, nil
+		},
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
+			return repository.Interview{
+				ID:            interviewID,
+				InterviewerID: ownerEmployeeID,
+				Status:        "PENDING",
+			}, nil
+		},
+		UpdateInterviewNoteFunc: func(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error) {
+			updateCalled = true
+			return repository.Interview{}, nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.PATCH("/recruitment/interviews/:id/notes", h.UpdateInterviewNotes)
+
+	body, _ := json.Marshal(model.UpdateInterviewNotesInput{Notes: "forbidden"})
+	req, _ := http.NewRequest("PATCH", "/recruitment/interviews/"+interviewIDStr+"/notes", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+	if updateCalled {
+		t.Errorf("expected update query to be blocked on forbidden access")
 	}
 }

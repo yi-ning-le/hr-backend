@@ -2,6 +2,8 @@ package service
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 
 	"hr-backend/internal/model"
@@ -10,8 +12,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
-
-const defaultPassword = "password123"
 
 type EmployeeService struct {
 	repo repository.Querier
@@ -36,8 +36,13 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 		employeeType = "EMPLOYEE"
 	}
 
-	// 1. Auto-create user account for this employee
-	hashedPassword, err := utils.HashPassword(defaultPassword)
+	// 1. Auto-create user account for this employee with a non-predictable temporary password.
+	temporaryPassword, err := generateTemporaryPassword()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate temporary password: %w", err)
+	}
+
+	hashedPassword, err := utils.HashPassword(temporaryPassword)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
@@ -81,10 +86,19 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 
 	emp, err := s.repo.CreateEmployee(ctx, params)
 	if err != nil {
+		_ = s.repo.DeleteUser(ctx, user.ID)
 		return nil, err
 	}
 
 	return mapEmployeeToModel(emp), nil
+}
+
+func generateTemporaryPassword() (string, error) {
+	bytes := make([]byte, 16)
+	if _, err := rand.Read(bytes); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(bytes), nil
 }
 
 func (s *EmployeeService) GetEmployee(ctx context.Context, id string) (*model.Employee, error) {

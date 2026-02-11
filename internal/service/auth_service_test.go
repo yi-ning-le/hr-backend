@@ -62,3 +62,41 @@ func TestAuthService_Register(t *testing.T) {
 	assert.Equal(t, input.Username, user.Username)
 	assert.True(t, employeeCreated, "CreateEmployee should have been called")
 }
+
+func TestAuthService_Register_RollsBackUserWhenEmployeeCreateFails(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	input := model.RegisterInput{
+		Username: "rollback-user",
+		Email:    "rollback@example.com",
+		Password: "password123",
+	}
+
+	createdUserID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}
+	mockRepo.CreateUserFunc = func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+		return repository.User{
+			ID:        createdUserID,
+			Username:  input.Username,
+			Email:     input.Email,
+			CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		}, nil
+	}
+
+	mockRepo.CreateEmployeeFunc = func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
+		return repository.Employee{}, assert.AnError
+	}
+
+	deleteCalled := false
+	mockRepo.DeleteUserFunc = func(ctx context.Context, id pgtype.UUID) error {
+		deleteCalled = true
+		assert.Equal(t, createdUserID, id)
+		return nil
+	}
+
+	user, err := service.Register(context.Background(), input)
+
+	assert.Error(t, err)
+	assert.Nil(t, user)
+	assert.True(t, deleteCalled, "DeleteUser should be called for rollback")
+}

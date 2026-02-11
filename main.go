@@ -69,25 +69,14 @@ func main() {
 	{
 		// Job Routes
 		api.GET("/jobs", jobHandler.ListJobs)
-		api.POST("/jobs", jobHandler.CreateJob)
-		api.PUT("/jobs/:id", jobHandler.UpdateJob)
-		api.DELETE("/jobs/:id", jobHandler.DeleteJob)
-		api.PATCH("/jobs/:id/status", jobHandler.ToggleStatus)
 
 		// Candidate Routes
 		api.GET("/candidates", candidateHandler.ListCandidates)
-		api.POST("/candidates", candidateHandler.CreateCandidate)
 		api.GET("/candidates/counts", candidateHandler.GetCandidateCounts)
 		api.GET("/candidates/:id", candidateHandler.GetCandidate)
-		api.POST("/candidates/:id/assign-reviewer", candidateHandler.AssignReviewer)
-		api.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 
 		// Candidate Status Routes
 		api.GET("/candidate-statuses", candidateStatusHandler.ListStatuses)
-		api.POST("/candidate-statuses", candidateStatusHandler.CreateStatus)
-		api.PUT("/candidate-statuses/:id", candidateStatusHandler.UpdateStatus)
-		api.DELETE("/candidate-statuses/:id", candidateStatusHandler.DeleteStatus)
-		api.PATCH("/candidate-statuses/reorder", candidateStatusHandler.ReorderStatuses)
 
 		// Employee Routes (Read - All authenticated users)
 		api.GET("/employees/me", employeeHandler.GetCurrentEmployee)
@@ -96,6 +85,34 @@ func main() {
 
 		// Recruitment Role Routes
 		api.GET("/recruitment/role", recruitmentHandler.GetMyRole)
+	}
+
+	recruitmentWriteAPI := r.Group("/")
+	recruitmentWriteAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	recruitmentWriteAPI.Use(middleware.RequireRecruiterOrAdmin(repo))
+	{
+		// Job write routes
+		recruitmentWriteAPI.POST("/jobs", jobHandler.CreateJob)
+		recruitmentWriteAPI.PUT("/jobs/:id", jobHandler.UpdateJob)
+		recruitmentWriteAPI.DELETE("/jobs/:id", jobHandler.DeleteJob)
+		recruitmentWriteAPI.PATCH("/jobs/:id/status", jobHandler.ToggleStatus)
+
+		// Candidate write routes
+		recruitmentWriteAPI.POST("/candidates", candidateHandler.CreateCandidate)
+		recruitmentWriteAPI.POST(
+			"/candidates/:id/assign-reviewer",
+			candidateHandler.AssignReviewer,
+		)
+		recruitmentWriteAPI.POST("/candidates/:id/review", candidateHandler.SubmitReview)
+
+		// Candidate status write routes
+		recruitmentWriteAPI.POST("/candidate-statuses", candidateStatusHandler.CreateStatus)
+		recruitmentWriteAPI.PUT("/candidate-statuses/:id", candidateStatusHandler.UpdateStatus)
+		recruitmentWriteAPI.DELETE("/candidate-statuses/:id", candidateStatusHandler.DeleteStatus)
+		recruitmentWriteAPI.PATCH(
+			"/candidate-statuses/reorder",
+			candidateStatusHandler.ReorderStatuses,
+		)
 	}
 
 	// HR-only Employee Routes (Create, Update, Delete)
@@ -133,11 +150,10 @@ func main() {
 	}
 
 	// Interviewer Routes (Employee access)
-	// Technically any employee can be an interviewer, so we just check auth.
-	// We could add a RequireInterviewer middleware if we wanted to be strict,
-	// but GetMyInterviews implicitly filters by user.
+	interviewerQueries := middleware.NewQueriesAdapter(repo)
 	interviewApi := r.Group("/recruitment")
 	interviewApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	interviewApi.Use(middleware.RequireInterviewerOrRecruiter(interviewerQueries))
 	{
 		interviewApi.GET("/interviews/me", recruitmentHandler.GetMyInterviews)
 		interviewApi.GET("/interviews/:id", recruitmentHandler.GetInterview)

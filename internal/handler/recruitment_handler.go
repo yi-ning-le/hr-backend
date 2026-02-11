@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
@@ -363,10 +364,25 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 		return
 	}
 
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
 	ctx := c.Request.Context()
 	interview, err := h.queries.GetInterview(ctx, interviewID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		return
+	}
+
+	canAccess, err := h.canAccessInterviewByInterviewer(ctx, userID, interview.InterviewerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interview permission"})
+		return
+	}
+	if !canAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Interview access denied"})
 		return
 	}
 
@@ -391,6 +407,11 @@ func (h *RecruitmentHandler) UpdateInterviewNotes(c *gin.Context) {
 		return
 	}
 
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
 	var input model.UpdateInterviewNotesInput
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -398,9 +419,25 @@ func (h *RecruitmentHandler) UpdateInterviewNotes(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+	existingInterview, err := h.queries.GetInterview(ctx, interviewID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		return
+	}
 
-	// Check if interview exists (optional, update will fail if not found but explicit check is nicer)
-	// For now direct update relies on row count or error, sqlc 'one' returns error if not found.
+	canAccess, err := h.canAccessInterviewByInterviewer(
+		ctx,
+		userID,
+		existingInterview.InterviewerID,
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interview permission"})
+		return
+	}
+	if !canAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Interview access denied"})
+		return
+	}
 
 	interview, err := h.queries.UpdateInterviewNote(ctx, repository.UpdateInterviewNoteParams{
 		ID:    interviewID,
@@ -421,6 +458,40 @@ func (h *RecruitmentHandler) UpdateInterviewNotes(c *gin.Context) {
 		Notes:         interview.Notes.String,
 		CreatedAt:     interview.CreatedAt.Time,
 	})
+}
+
+func currentUserIDFromContext(c *gin.Context) (pgtype.UUID, bool) {
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return pgtype.UUID{}, false
+	}
+
+	userID, err := parseUUID(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return pgtype.UUID{}, false
+	}
+
+	return userID, true
+}
+
+func (h *RecruitmentHandler) canAccessInterviewByInterviewer(
+	ctx context.Context,
+	userID pgtype.UUID,
+	interviewerID pgtype.UUID,
+) (bool, error) {
+	isAdmin, err := h.queries.CheckIsAdmin(ctx, userID)
+	if err == nil && isAdmin {
+		return true, nil
+	}
+
+	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
+	if err != nil {
+		return false, nil
+	}
+
+	return employee.ID == interviewerID, nil
 }
 
 // Helper functions

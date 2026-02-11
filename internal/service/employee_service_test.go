@@ -11,6 +11,7 @@ import (
 	"hr-backend/test/mocks"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateEmployee_AutoCreatesUser(t *testing.T) {
@@ -92,6 +93,52 @@ func TestCreateEmployee_AutoCreatesUser(t *testing.T) {
 	// Default employee type should be EMPLOYEE
 	if employee.EmployeeType != "EMPLOYEE" {
 		t.Errorf("expected default employeeType EMPLOYEE, got %s", employee.EmployeeType)
+	}
+}
+
+func TestCreateEmployee_RollsBackUserWhenEmployeeCreateFails(t *testing.T) {
+	createdUserID := pgtype.UUID{Bytes: [16]byte{7}, Valid: true}
+	deleteCalled := false
+
+	mockRepo := &mocks.MockQuerier{
+		CreateUserFunc: func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
+			return repository.User{
+				ID: createdUserID,
+			}, nil
+		},
+		CreateEmployeeFunc: func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
+			return repository.Employee{}, assert.AnError
+		},
+		DeleteUserFunc: func(ctx context.Context, id pgtype.UUID) error {
+			deleteCalled = true
+			if id != createdUserID {
+				t.Errorf("expected deleted user id %v, got %v", createdUserID, id)
+			}
+			return nil
+		},
+	}
+
+	svc := service.NewEmployeeService(mockRepo)
+
+	input := model.EmployeeInput{
+		FirstName:  "回滚",
+		LastName:   "测试",
+		Email:      "rollback@example.com",
+		Phone:      "13800138099",
+		Department: "技术部",
+		Position:   "工程师",
+		JoinDate:   time.Now(),
+	}
+
+	employee, err := svc.CreateEmployee(context.Background(), input)
+	if err == nil {
+		t.Fatal("expected error when CreateEmployee fails")
+	}
+	if employee != nil {
+		t.Fatal("expected nil employee on failure")
+	}
+	if !deleteCalled {
+		t.Fatal("expected DeleteUser rollback to be called")
 	}
 }
 

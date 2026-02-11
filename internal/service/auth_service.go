@@ -75,11 +75,7 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 
 	_, err = s.repo.CreateEmployee(ctx, empParams)
 	if err != nil {
-		// Log error but don't fail registration?
-		// Or fail it so user tries again?
-		// Better to fail so we don't end up with unlinked users.
-		// In a real app, we'd roll back the User creation (transaction).
-		// For now, return error.
+		_ = s.repo.DeleteUser(ctx, user.ID)
 		return nil, errors.New("failed to create linked employee record: " + err.Error())
 	}
 

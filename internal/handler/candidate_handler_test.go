@@ -18,46 +18,6 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
-func TestAssignReviewerHandler(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-
-	candidateID := pgtype.UUID{Bytes: [16]byte{1}, Valid: true}
-	reviewerID := pgtype.UUID{Bytes: [16]byte{2}, Valid: true}
-
-	mockRepo := &mocks.MockQuerier{
-		AssignReviewerFunc: func(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error) {
-			return repository.AssignReviewerRow{
-				ID:         arg.ID,
-				ReviewerID: arg.ReviewerID,
-				Name:       "Test Candidate",
-			}, nil
-		},
-		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
-			return repository.GetCandidateRow{
-				ID:           candidateID,
-				ReviewerID:   reviewerID,
-				ReviewStatus: pgtype.Text{String: "assigned", Valid: true},
-				AppliedAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true},
-			}, nil
-		},
-	}
-
-	svc := service.NewCandidateService(mockRepo)
-	h := handler.NewCandidateHandler(svc)
-
-	r := gin.New()
-	r.POST("/candidates/:id/assign-reviewer", h.AssignReviewer)
-
-	// UUID string representation of bytes [16]byte{1} is usually 01000000-0000-0000-0000-000000000000?
-	// Actually pgtype.UUID Bytes is just [16]byte.
-	// For test simplicity, I'll use a known UUID string and convert it if needed, or just let service handle conversion.
-	// But in mock I'm checking equality.
-	// The service helper `utils.StringToUUID` is used.
-	// Let's use a real UUID string to be safe with parsing.
-
-	// Re-defining for easier matching
-}
-
 func TestAssignReviewerHandler_realUUID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -102,5 +62,97 @@ func TestAssignReviewerHandler_realUUID(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d, body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestSubmitReviewHandler_InvalidReviewStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	submitCalled := false
+	mockRepo := &mocks.MockQuerier{
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			submitCalled = true
+			return repository.SubmitReviewRow{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/review", h.SubmitReview)
+
+	body, _ := json.Marshal(map[string]string{
+		"reviewStatus": "unexpected",
+		"reviewNote":   "test",
+	})
+	req, _ := http.NewRequest(
+		"POST",
+		"/candidates/00000000-0000-0000-0000-000000000001/review",
+		bytes.NewBuffer(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+	if submitCalled {
+		t.Error("expected SubmitReview not to be called for invalid reviewStatus")
+	}
+}
+
+func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	var candidateID pgtype.UUID
+	candidateID.Scan(candidateIDStr)
+
+	submitCalled := false
+	mockRepo := &mocks.MockQuerier{
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			submitCalled = true
+			if arg.ReviewStatus.String != "suitable" {
+				t.Errorf("expected normalized status suitable, got %s", arg.ReviewStatus.String)
+			}
+			return repository.SubmitReviewRow{
+				ID:              candidateID,
+				ReviewStatus:    pgtype.Text{String: arg.ReviewStatus.String, Valid: true},
+				ReviewNote:      arg.ReviewNote,
+				AppliedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
+				AppliedJobTitle: "Software Engineer",
+				Name:            "Test Candidate",
+			}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/review", h.SubmitReview)
+
+	body, _ := json.Marshal(map[string]string{
+		"reviewStatus": "  SUITABLE ",
+		"reviewNote":   "strong fit",
+	})
+	req, _ := http.NewRequest(
+		"POST",
+		"/candidates/"+candidateIDStr+"/review",
+		bytes.NewBuffer(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+	if !submitCalled {
+		t.Error("expected SubmitReview to be called")
 	}
 }

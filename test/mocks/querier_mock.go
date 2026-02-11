@@ -30,6 +30,7 @@ type MockQuerier struct {
 	GetCandidateCountsByJobFunc func(ctx context.Context) ([]repository.GetCandidateCountsByJobRow, error)
 
 	CreateUserFunc        func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error)
+	DeleteUserFunc        func(ctx context.Context, id pgtype.UUID) error
 	GetUserByUsernameFunc func(ctx context.Context, username string) (repository.User, error)
 	GetUserByIDFunc       func(ctx context.Context, id pgtype.UUID) (repository.User, error)
 
@@ -140,6 +141,12 @@ func (m *MockQuerier) SubmitReview(ctx context.Context, arg repository.SubmitRev
 
 func (m *MockQuerier) CreateUser(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
 	return m.CreateUserFunc(ctx, arg)
+}
+func (m *MockQuerier) DeleteUser(ctx context.Context, id pgtype.UUID) error {
+	if m.DeleteUserFunc != nil {
+		return m.DeleteUserFunc(ctx, id)
+	}
+	return nil
 }
 func (m *MockQuerier) GetUserByUsername(ctx context.Context, username string) (repository.User, error) {
 	return m.GetUserByUsernameFunc(ctx, username)
