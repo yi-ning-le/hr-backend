@@ -26,6 +26,9 @@ type MockQuerier struct {
 	UpdateCandidateResumeFunc func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error)
 	DeleteCandidateFunc       func(ctx context.Context, id pgtype.UUID) error
 
+	CountCandidatesFunc         func(ctx context.Context, arg repository.CountCandidatesParams) (int64, error)
+	GetCandidateCountsByJobFunc func(ctx context.Context) ([]repository.GetCandidateCountsByJobRow, error)
+
 	CreateUserFunc        func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error)
 	GetUserByUsernameFunc func(ctx context.Context, username string) (repository.User, error)
 	GetUserByIDFunc       func(ctx context.Context, id pgtype.UUID) (repository.User, error)
@@ -111,6 +114,20 @@ func (m *MockQuerier) UpdateCandidateResume(ctx context.Context, arg repository.
 }
 func (m *MockQuerier) DeleteCandidate(ctx context.Context, id pgtype.UUID) error {
 	return m.DeleteCandidateFunc(ctx, id)
+}
+
+func (m *MockQuerier) CountCandidates(ctx context.Context, arg repository.CountCandidatesParams) (int64, error) {
+	if m.CountCandidatesFunc != nil {
+		return m.CountCandidatesFunc(ctx, arg)
+	}
+	return 0, nil
+}
+
+func (m *MockQuerier) GetCandidateCountsByJob(ctx context.Context) ([]repository.GetCandidateCountsByJobRow, error) {
+	if m.GetCandidateCountsByJobFunc != nil {
+		return m.GetCandidateCountsByJobFunc(ctx)
+	}
+	return nil, nil
 }
 
 func (m *MockQuerier) AssignReviewer(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error) {

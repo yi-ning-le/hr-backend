@@ -59,7 +59,30 @@ JOIN jobs j ON c.applied_job_id = j.id
 WHERE (sqlc.narg('job_id')::uuid IS NULL OR c.applied_job_id = sqlc.narg('job_id'))
   AND (sqlc.narg('reviewer_id')::uuid IS NULL OR c.reviewer_id = sqlc.narg('reviewer_id'))
   AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
-ORDER BY c.applied_at DESC;
+  AND (sqlc.narg('status')::text IS NULL OR c.status = sqlc.narg('status'))
+  AND (sqlc.narg('search')::text IS NULL OR 
+       c.name ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+       c.email ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+       c.phone ILIKE '%' || sqlc.narg('search')::text || '%')
+ORDER BY c.applied_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountCandidates :one
+SELECT COUNT(*)
+FROM candidates c
+WHERE (sqlc.narg('job_id')::uuid IS NULL OR c.applied_job_id = sqlc.narg('job_id'))
+  AND (sqlc.narg('reviewer_id')::uuid IS NULL OR c.reviewer_id = sqlc.narg('reviewer_id'))
+  AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
+  AND (sqlc.narg('status')::text IS NULL OR c.status = sqlc.narg('status'))
+  AND (sqlc.narg('search')::text IS NULL OR 
+       c.name ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+       c.email ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+       c.phone ILIKE '%' || sqlc.narg('search')::text || '%');
+
+-- name: GetCandidateCountsByJob :many
+SELECT applied_job_id, COUNT(*) as count
+FROM candidates
+GROUP BY applied_job_id;
 
 -- name: UpdateCandidate :one
 UPDATE candidates

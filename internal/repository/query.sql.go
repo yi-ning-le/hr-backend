@@ -135,6 +135,40 @@ func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID
 	return employee_id, err
 }
 
+const countCandidates = `-- name: CountCandidates :one
+SELECT COUNT(*)
+FROM candidates c
+WHERE ($1::uuid IS NULL OR c.applied_job_id = $1)
+  AND ($2::uuid IS NULL OR c.reviewer_id = $2)
+  AND ($3::text IS NULL OR c.review_status = $3)
+  AND ($4::text IS NULL OR c.status = $4)
+  AND ($5::text IS NULL OR 
+       c.name ILIKE '%' || $5::text || '%' OR 
+       c.email ILIKE '%' || $5::text || '%' OR 
+       c.phone ILIKE '%' || $5::text || '%')
+`
+
+type CountCandidatesParams struct {
+	JobID        pgtype.UUID `json:"job_id"`
+	ReviewerID   pgtype.UUID `json:"reviewer_id"`
+	ReviewStatus pgtype.Text `json:"review_status"`
+	Status       pgtype.Text `json:"status"`
+	Search       pgtype.Text `json:"search"`
+}
+
+func (q *Queries) CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countCandidates,
+		arg.JobID,
+		arg.ReviewerID,
+		arg.ReviewStatus,
+		arg.Status,
+		arg.Search,
+	)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countEmployees = `-- name: CountEmployees :one
 SELECT COUNT(*) FROM employees e
 JOIN users u ON e.user_id = u.id
@@ -552,6 +586,37 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 	return i, err
 }
 
+const getCandidateCountsByJob = `-- name: GetCandidateCountsByJob :many
+SELECT applied_job_id, COUNT(*) as count
+FROM candidates
+GROUP BY applied_job_id
+`
+
+type GetCandidateCountsByJobRow struct {
+	AppliedJobID pgtype.UUID `json:"applied_job_id"`
+	Count        int64       `json:"count"`
+}
+
+func (q *Queries) GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error) {
+	rows, err := q.db.Query(ctx, getCandidateCountsByJob)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCandidateCountsByJobRow
+	for rows.Next() {
+		var i GetCandidateCountsByJobRow
+		if err := rows.Scan(&i.AppliedJobID, &i.Count); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCandidateStatus = `-- name: GetCandidateStatus :one
 SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
 WHERE id = $1 LIMIT 1
@@ -773,16 +838,26 @@ const listCandidates = `-- name: ListCandidates :many
 SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
-WHERE ($1::uuid IS NULL OR c.applied_job_id = $1)
-  AND ($2::uuid IS NULL OR c.reviewer_id = $2)
-  AND ($3::text IS NULL OR c.review_status = $3)
+WHERE ($3::uuid IS NULL OR c.applied_job_id = $3)
+  AND ($4::uuid IS NULL OR c.reviewer_id = $4)
+  AND ($5::text IS NULL OR c.review_status = $5)
+  AND ($6::text IS NULL OR c.status = $6)
+  AND ($7::text IS NULL OR 
+       c.name ILIKE '%' || $7::text || '%' OR 
+       c.email ILIKE '%' || $7::text || '%' OR 
+       c.phone ILIKE '%' || $7::text || '%')
 ORDER BY c.applied_at DESC
+LIMIT $1 OFFSET $2
 `
 
 type ListCandidatesParams struct {
+	Limit        int32       `json:"limit"`
+	Offset       int32       `json:"offset"`
 	JobID        pgtype.UUID `json:"job_id"`
 	ReviewerID   pgtype.UUID `json:"reviewer_id"`
 	ReviewStatus pgtype.Text `json:"review_status"`
+	Status       pgtype.Text `json:"status"`
+	Search       pgtype.Text `json:"search"`
 }
 
 type ListCandidatesRow struct {
@@ -808,7 +883,15 @@ type ListCandidatesRow struct {
 }
 
 func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error) {
-	rows, err := q.db.Query(ctx, listCandidates, arg.JobID, arg.ReviewerID, arg.ReviewStatus)
+	rows, err := q.db.Query(ctx, listCandidates,
+		arg.Limit,
+		arg.Offset,
+		arg.JobID,
+		arg.ReviewerID,
+		arg.ReviewStatus,
+		arg.Status,
+		arg.Search,
+	)
 	if err != nil {
 		return nil, err
 	}

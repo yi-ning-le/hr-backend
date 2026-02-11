@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/service"
@@ -25,13 +26,65 @@ func (h *CandidateHandler) ListCandidates(c *gin.Context) {
 	jobID := c.Query("jobId")
 	reviewerID := c.Query("reviewerId")
 	reviewStatus := c.Query("reviewStatus")
+	search := c.Query("q")
+	status := c.Query("status") // not used in service ListCandidates yet? Wait service uses reviewStatus, but frontend passes status?
+	// Check service implementation:
+	// func (s *CandidateService) ListCandidates(..., reviewStatusFilter string, ...)
+	// unique status filter is for candidate status (new, screening, etc), reviewStatus is for review (pending, approved).
+	// The previous implementation didn't filter by candidate status in `ListCandidates`?
+	// Let's check query.sql:
+	// WHERE ... AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
+	// It seems `status` column on candidates was not filtered in previous ListCandidates?
+	// Wait, let me check query.sql again.
+	// Yes, previous query.sql only filtered by review_status.
+	// But frontend `CandidateManagement` filters by `status`.
+	// The previous frontend implementation fetched ALL and filtered locally.
+	// So I need to add `status` filter to backend if I want server-side filtering.
+	// I missed adding `status` to `ListCandidates` query in previous step!
+	// I added `search`, `page`, `limit`.
+	// I should probably add `status` (candidate status) too.
 
-	candidates, err := h.service.ListCandidates(c.Request.Context(), jobID, reviewerID, reviewStatus)
+	// For now, let's just use what I added. Frontend will need to pass `reviewStatus` if it means that, or I need to add `status` filter.
+	// The frontend `CandidateManagement` uses `status` (e.g. 'new', 'screening').
+	// So I definitely see a missing piece in my plan. I need to add `status` filter to SQL.
+
+	// Let's finish the handler update for what I have, and then I might need to cycle back to SQL if I want full server-side filtering.
+	// Actually, `CandidateManagement.tsx` has `const statusFilter = search.status || [];`
+	// This refers to candidate status (new, screening), not review status.
+	// The database has `status` column.
+	// The `ListCandidates` query I modified:
+	// WHERE ... AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
+	// It does NOT have `c.status = ...`.
+
+	// ACTION: I need to start a sub-task to add `status` filter to SQL.
+	// But first, let's minimally fix the build by updating the handler to match current service signature.
+
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
+
+	candidates, total, err := h.service.ListCandidates(c.Request.Context(), jobID, reviewerID, reviewStatus, status, search, page, limit)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-	c.JSON(http.StatusOK, candidates)
+
+	c.JSON(http.StatusOK, gin.H{
+		"data": candidates,
+		"meta": gin.H{
+			"total": total,
+			"page":  page,
+			"limit": limit,
+		},
+	})
+}
+
+func (h *CandidateHandler) GetCandidateCounts(c *gin.Context) {
+	counts, err := h.service.GetCandidateCountsByJob(c.Request.Context())
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, counts)
 }
 
 func (h *CandidateHandler) CreateCandidate(c *gin.Context) {

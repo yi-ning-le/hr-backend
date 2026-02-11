@@ -19,6 +19,7 @@ type Querier interface {
 	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error)
 	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
 	CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error)
@@ -34,6 +35,7 @@ type Querier interface {
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
+	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)
 	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
 	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
 	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)

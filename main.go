@@ -77,12 +77,8 @@ func main() {
 		// Candidate Routes
 		api.GET("/candidates", candidateHandler.ListCandidates)
 		api.POST("/candidates", candidateHandler.CreateCandidate)
+		api.GET("/candidates/counts", candidateHandler.GetCandidateCounts)
 		api.GET("/candidates/:id", candidateHandler.GetCandidate)
-		api.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
-		api.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
-		api.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
-		api.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
-		api.POST("/candidates/:id/resume", candidateHandler.UploadResume)
 		api.POST("/candidates/:id/assign-reviewer", candidateHandler.AssignReviewer)
 		api.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 

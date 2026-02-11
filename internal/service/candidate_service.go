@@ -52,43 +52,89 @@ func (s *CandidateService) CreateCandidate(ctx context.Context, input model.Cand
 	return s.GetCandidate(ctx, utils.UUIDToString(candidate.ID))
 }
 
-func (s *CandidateService) ListCandidates(ctx context.Context, jobIDFilter string, reviewerIDFilter string, reviewStatusFilter string) ([]model.Candidate, error) {
+func (s *CandidateService) ListCandidates(ctx context.Context, jobIDFilter string, reviewerIDFilter string, reviewStatusFilter string, statusFilter string, search string, page int, limit int) ([]model.Candidate, int64, error) {
 	params := repository.ListCandidatesParams{
 		JobID:        pgtype.UUID{Valid: false},
 		ReviewerID:   pgtype.UUID{Valid: false},
 		ReviewStatus: pgtype.Text{Valid: false},
+		Status:       pgtype.Text{Valid: false},
+		Search:       pgtype.Text{Valid: false},
+		Limit:        int32(limit),
+		Offset:       int32((page - 1) * limit),
 	}
 
-	if jobIDFilter != "" {
+	countParams := repository.CountCandidatesParams{
+		JobID:        pgtype.UUID{Valid: false},
+		ReviewerID:   pgtype.UUID{Valid: false},
+		ReviewStatus: pgtype.Text{Valid: false},
+		Status:       pgtype.Text{Valid: false},
+		Search:       pgtype.Text{Valid: false},
+	}
+
+	if jobIDFilter != "" && jobIDFilter != "all" {
 		uuid, err := utils.StringToUUID(jobIDFilter)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		params.JobID = uuid
+		countParams.JobID = uuid
 	}
 
 	if reviewerIDFilter != "" {
 		uuid, err := utils.StringToUUID(reviewerIDFilter)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		params.ReviewerID = uuid
+		countParams.ReviewerID = uuid
 	}
 
 	if reviewStatusFilter != "" {
 		params.ReviewStatus = pgtype.Text{String: reviewStatusFilter, Valid: true}
+		countParams.ReviewStatus = pgtype.Text{String: reviewStatusFilter, Valid: true}
 	}
 
+	if statusFilter != "" {
+		params.Status = pgtype.Text{String: statusFilter, Valid: true}
+		countParams.Status = pgtype.Text{String: statusFilter, Valid: true}
+	}
+
+	if search != "" {
+		params.Search = pgtype.Text{String: search, Valid: true}
+		countParams.Search = pgtype.Text{String: search, Valid: true}
+	}
+
+	// efficient parallel fetch if possible, but sequential is fine for now
 	rows, err := s.repo.ListCandidates(ctx, params)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
+	}
+
+	total, err := s.repo.CountCandidates(ctx, countParams)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	result := make([]model.Candidate, len(rows))
 	for i, r := range rows {
 		result[i] = mapCandidateRowToModel(r)
 	}
-	return result, nil
+	return result, total, nil
+}
+
+func (s *CandidateService) GetCandidateCountsByJob(ctx context.Context) (map[string]int64, error) {
+	rows, err := s.repo.GetCandidateCountsByJob(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	counts := make(map[string]int64)
+	for _, row := range rows {
+		if row.AppliedJobID.Valid {
+			counts[utils.UUIDToString(row.AppliedJobID)] = row.Count
+		}
+	}
+	return counts, nil
 }
 
 func (s *CandidateService) AssignReviewer(ctx context.Context, id string, reviewerID string) (*model.Candidate, error) {
