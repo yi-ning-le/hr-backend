@@ -57,8 +57,8 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	}
 
 	// Check if recruiter
-	_, err = h.queries.CheckRecruiterRole(ctx, employee.ID)
-	isRecruiter := err == nil
+	recruiterID, err := h.queries.CheckRecruiterRole(ctx, employee.ID)
+	isRecruiter := err == nil && recruiterID.Valid
 
 	canReviewResumes := employee.CanReviewResumes
 
@@ -242,11 +242,6 @@ func (h *RecruitmentHandler) TransferInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.queries.GrantResumeReviewCapability(ctx, newInterviewerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant interviewer capability"})
-		return
-	}
-
 	_, err = h.queries.TransferInterview(ctx, repository.TransferInterviewParams{
 		ID:            interviewID,
 		InterviewerID: newInterviewerID,
@@ -286,11 +281,6 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	if err := h.queries.GrantResumeReviewCapability(ctx, interviewerID); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to grant interviewer capability"})
-		return
-	}
-
 	// Create interview
 	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{
 		CandidateID:   candidateID,
@@ -493,6 +483,10 @@ func (h *RecruitmentHandler) canAccessInterviewByInterviewer(
 	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
 	if err != nil {
 		return false, nil
+	}
+
+	if recruiterID, checkErr := h.queries.CheckRecruiterRole(ctx, employee.ID); checkErr == nil && recruiterID.Valid {
+		return true, nil
 	}
 
 	return employee.ID == interviewerID, nil

@@ -405,3 +405,58 @@ func TestUpdateInterviewNotes_ForbiddenForNonOwner(t *testing.T) {
 		t.Errorf("expected update query to be blocked on forbidden access")
 	}
 }
+
+func TestGetInterview_AllowsRecruiterNonOwner(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "11111111-1111-1111-1111-111111111111"
+	ownerEmployeeIDStr := "22222222-2222-2222-2222-222222222222"
+	requesterEmployeeIDStr := "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	interviewIDStr := "33333333-3333-3333-3333-333333333333"
+
+	var userID, ownerEmployeeID, requesterEmployeeID, interviewID pgtype.UUID
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
+	if err := ownerEmployeeID.Scan(ownerEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan owner employee id: %v", err)
+	}
+	if err := requesterEmployeeID.Scan(requesterEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan requester employee id: %v", err)
+	}
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
+
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: requesterEmployeeID, UserID: userID}, nil
+		},
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
+			return repository.Interview{
+				ID:            interviewID,
+				InterviewerID: ownerEmployeeID,
+				Status:        "PENDING",
+			}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return employeeID, nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.GET("/recruitment/interviews/:id", h.GetInterview)
+
+	req, _ := http.NewRequest("GET", "/recruitment/interviews/"+interviewIDStr, nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}

@@ -22,7 +22,6 @@ type MockQuerier struct {
 	ListCandidatesFunc        func(ctx context.Context, arg repository.ListCandidatesParams) ([]repository.ListCandidatesRow, error)
 	UpdateCandidateFunc       func(ctx context.Context, arg repository.UpdateCandidateParams) (repository.Candidate, error)
 	UpdateCandidateStatusFunc func(ctx context.Context, arg repository.UpdateCandidateStatusParams) (repository.Candidate, error)
-	UpdateCandidateNoteFunc   func(ctx context.Context, arg repository.UpdateCandidateNoteParams) (repository.Candidate, error)
 	UpdateCandidateResumeFunc func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error)
 	DeleteCandidateFunc       func(ctx context.Context, id pgtype.UUID) error
 
@@ -72,6 +71,12 @@ type MockQuerier struct {
 	AssignHRRoleFunc func(ctx context.Context, id pgtype.UUID) error
 	RevokeHRRoleFunc func(ctx context.Context, id pgtype.UUID) error
 	ListHRsFunc      func(ctx context.Context) ([]repository.ListHRsRow, error)
+
+	// Candidate Comment mock functions
+	CreateCandidateCommentFunc func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error)
+	ListCandidateCommentsFunc  func(ctx context.Context, candidateID pgtype.UUID) ([]repository.ListCandidateCommentsRow, error)
+	GetCandidateCommentFunc    func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error)
+	DeleteCandidateCommentFunc func(ctx context.Context, id pgtype.UUID) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -107,9 +112,6 @@ func (m *MockQuerier) UpdateCandidate(ctx context.Context, arg repository.Update
 }
 func (m *MockQuerier) UpdateCandidateStatus(ctx context.Context, arg repository.UpdateCandidateStatusParams) (repository.Candidate, error) {
 	return m.UpdateCandidateStatusFunc(ctx, arg)
-}
-func (m *MockQuerier) UpdateCandidateNote(ctx context.Context, arg repository.UpdateCandidateNoteParams) (repository.Candidate, error) {
-	return m.UpdateCandidateNoteFunc(ctx, arg)
 }
 func (m *MockQuerier) UpdateCandidateResume(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error) {
 	return m.UpdateCandidateResumeFunc(ctx, arg)
@@ -354,4 +356,33 @@ func (m *MockQuerier) ListHRs(ctx context.Context) ([]repository.ListHRsRow, err
 		return m.ListHRsFunc(ctx)
 	}
 	return nil, nil
+}
+
+// Candidate Comment methods
+func (m *MockQuerier) CreateCandidateComment(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+	if m.CreateCandidateCommentFunc != nil {
+		return m.CreateCandidateCommentFunc(ctx, arg)
+	}
+	return repository.CandidateComment{}, nil
+}
+
+func (m *MockQuerier) ListCandidateComments(ctx context.Context, candidateID pgtype.UUID) ([]repository.ListCandidateCommentsRow, error) {
+	if m.ListCandidateCommentsFunc != nil {
+		return m.ListCandidateCommentsFunc(ctx, candidateID)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) GetCandidateComment(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
+	if m.GetCandidateCommentFunc != nil {
+		return m.GetCandidateCommentFunc(ctx, id)
+	}
+	return repository.CandidateComment{}, nil
+}
+
+func (m *MockQuerier) DeleteCandidateComment(ctx context.Context, id pgtype.UUID) error {
+	if m.DeleteCandidateCommentFunc != nil {
+		return m.DeleteCandidateCommentFunc(ctx, id)
+	}
+	return nil
 }

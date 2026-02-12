@@ -43,7 +43,7 @@ SET reviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
 `
 
 type AssignReviewerParams struct {
@@ -63,7 +63,6 @@ type AssignReviewerRow struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
@@ -88,7 +87,6 @@ func (q *Queries) AssignReviewer(ctx context.Context, arg AssignReviewerParams) 
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -193,11 +191,11 @@ func (q *Queries) CountEmployees(ctx context.Context, arg CountEmployeesParams) 
 
 const createCandidate = `-- name: CreateCandidate :one
 INSERT INTO candidates (
-  name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at
+  name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
 `
 
 type CreateCandidateParams struct {
@@ -211,7 +209,6 @@ type CreateCandidateParams struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 }
 
@@ -227,7 +224,6 @@ func (q *Queries) CreateCandidate(ctx context.Context, arg CreateCandidateParams
 		arg.Channel,
 		arg.ResumeUrl,
 		arg.Status,
-		arg.Note,
 		arg.AppliedAt,
 	)
 	var i Candidate
@@ -243,13 +239,42 @@ func (q *Queries) CreateCandidate(ctx context.Context, arg CreateCandidateParams
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
 		&i.ReviewNote,
+	)
+	return i, err
+}
+
+const createCandidateComment = `-- name: CreateCandidateComment :one
+
+INSERT INTO candidate_comments (
+    candidate_id, author_id, content
+) VALUES (
+    $1, $2, $3
+)
+RETURNING id, candidate_id, author_id, content, created_at
+`
+
+type CreateCandidateCommentParams struct {
+	CandidateID pgtype.UUID `json:"candidate_id"`
+	AuthorID    pgtype.UUID `json:"author_id"`
+	Content     string      `json:"content"`
+}
+
+// Candidate Comment queries
+func (q *Queries) CreateCandidateComment(ctx context.Context, arg CreateCandidateCommentParams) (CandidateComment, error) {
+	row := q.db.QueryRow(ctx, createCandidateComment, arg.CandidateID, arg.AuthorID, arg.Content)
+	var i CandidateComment
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.AuthorID,
+		&i.Content,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -489,6 +514,15 @@ func (q *Queries) DeleteCandidate(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteCandidateComment = `-- name: DeleteCandidateComment :exec
+DELETE FROM candidate_comments WHERE id = $1
+`
+
+func (q *Queries) DeleteCandidateComment(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteCandidateComment, id)
+	return err
+}
+
 const deleteCandidateStatus = `-- name: DeleteCandidateStatus :exec
 DELETE FROM candidate_statuses
 WHERE id = $1
@@ -541,7 +575,7 @@ func (q *Queries) GetActiveInterviewCount(ctx context.Context, interviewerID pgt
 }
 
 const getCandidate = `-- name: GetCandidate :one
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE c.id = $1 LIMIT 1
@@ -559,7 +593,6 @@ type GetCandidateRow struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
@@ -584,7 +617,6 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -592,6 +624,23 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 		&i.ReviewStatus,
 		&i.ReviewNote,
 		&i.AppliedJobTitle,
+	)
+	return i, err
+}
+
+const getCandidateComment = `-- name: GetCandidateComment :one
+SELECT id, candidate_id, author_id, content, created_at FROM candidate_comments WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetCandidateComment(ctx context.Context, id pgtype.UUID) (CandidateComment, error) {
+	row := q.db.QueryRow(ctx, getCandidateComment, id)
+	var i CandidateComment
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.AuthorID,
+		&i.Content,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -822,6 +871,63 @@ func (q *Queries) GrantResumeReviewCapability(ctx context.Context, id pgtype.UUI
 	return err
 }
 
+const listCandidateComments = `-- name: ListCandidateComments :many
+SELECT 
+    cc.id, cc.candidate_id, cc.author_id, cc.content, cc.created_at,
+    e.first_name || ' ' || e.last_name as author_name,
+    u.avatar as author_avatar,
+    CASE 
+        WHEN e.employee_type = 'HR' OR rr.employee_id IS NOT NULL THEN 'HR'
+        ELSE 'INTERVIEWER'
+    END as author_role
+FROM candidate_comments cc
+JOIN employees e ON cc.author_id = e.id
+JOIN users u ON e.user_id = u.id
+LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id
+WHERE cc.candidate_id = $1
+ORDER BY cc.created_at DESC
+`
+
+type ListCandidateCommentsRow struct {
+	ID           pgtype.UUID        `json:"id"`
+	CandidateID  pgtype.UUID        `json:"candidate_id"`
+	AuthorID     pgtype.UUID        `json:"author_id"`
+	Content      string             `json:"content"`
+	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	AuthorName   interface{}        `json:"author_name"`
+	AuthorAvatar pgtype.Text        `json:"author_avatar"`
+	AuthorRole   string             `json:"author_role"`
+}
+
+func (q *Queries) ListCandidateComments(ctx context.Context, candidateID pgtype.UUID) ([]ListCandidateCommentsRow, error) {
+	rows, err := q.db.Query(ctx, listCandidateComments, candidateID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListCandidateCommentsRow
+	for rows.Next() {
+		var i ListCandidateCommentsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CandidateID,
+			&i.AuthorID,
+			&i.Content,
+			&i.CreatedAt,
+			&i.AuthorName,
+			&i.AuthorAvatar,
+			&i.AuthorRole,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listCandidateStatuses = `-- name: ListCandidateStatuses :many
 
 SELECT id, name, slug, type, sort_order, color, created_at, updated_at FROM candidate_statuses
@@ -859,7 +965,7 @@ func (q *Queries) ListCandidateStatuses(ctx context.Context) ([]CandidateStatus,
 }
 
 const listCandidates = `-- name: ListCandidates :many
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE ($3::uuid IS NULL OR c.applied_job_id = $3)
@@ -896,7 +1002,6 @@ type ListCandidatesRow struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
@@ -935,7 +1040,6 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 			&i.Channel,
 			&i.ResumeUrl,
 			&i.Status,
-			&i.Note,
 			&i.AppliedAt,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -1201,7 +1305,7 @@ SET review_status = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
 `
 
 type SubmitReviewParams struct {
@@ -1222,7 +1326,6 @@ type SubmitReviewRow struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
@@ -1247,7 +1350,6 @@ func (q *Queries) SubmitReview(ctx context.Context, arg SubmitReviewParams) (Sub
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1301,11 +1403,10 @@ SET name = $2,
     channel = $9,
     resume_url = $10,
     status = $11,
-    note = $12,
-    applied_at = $13,
+    applied_at = $12,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
 `
 
 type UpdateCandidateParams struct {
@@ -1320,7 +1421,6 @@ type UpdateCandidateParams struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 }
 
@@ -1337,7 +1437,6 @@ func (q *Queries) UpdateCandidate(ctx context.Context, arg UpdateCandidateParams
 		arg.Channel,
 		arg.ResumeUrl,
 		arg.Status,
-		arg.Note,
 		arg.AppliedAt,
 	)
 	var i Candidate
@@ -1353,46 +1452,6 @@ func (q *Queries) UpdateCandidate(ctx context.Context, arg UpdateCandidateParams
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
-		&i.AppliedAt,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.ReviewerID,
-		&i.ReviewStatus,
-		&i.ReviewNote,
-	)
-	return i, err
-}
-
-const updateCandidateNote = `-- name: UpdateCandidateNote :one
-UPDATE candidates
-SET note = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
-`
-
-type UpdateCandidateNoteParams struct {
-	ID   pgtype.UUID `json:"id"`
-	Note pgtype.Text `json:"note"`
-}
-
-func (q *Queries) UpdateCandidateNote(ctx context.Context, arg UpdateCandidateNoteParams) (Candidate, error) {
-	row := q.db.QueryRow(ctx, updateCandidateNote, arg.ID, arg.Note)
-	var i Candidate
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Avatar,
-		&i.Email,
-		&i.Phone,
-		&i.ExperienceYears,
-		&i.Education,
-		&i.AppliedJobID,
-		&i.Channel,
-		&i.ResumeUrl,
-		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1408,7 +1467,7 @@ UPDATE candidates
 SET resume_url = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
 `
 
 type UpdateCandidateResumeParams struct {
@@ -1431,7 +1490,6 @@ func (q *Queries) UpdateCandidateResume(ctx context.Context, arg UpdateCandidate
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -1447,7 +1505,7 @@ UPDATE candidates
 SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
 `
 
 type UpdateCandidateStatusParams struct {
@@ -1470,7 +1528,6 @@ func (q *Queries) UpdateCandidateStatus(ctx context.Context, arg UpdateCandidate
 		&i.Channel,
 		&i.ResumeUrl,
 		&i.Status,
-		&i.Note,
 		&i.AppliedAt,
 		&i.CreatedAt,
 		&i.UpdatedAt,

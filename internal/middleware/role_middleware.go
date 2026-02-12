@@ -41,6 +41,11 @@ func (a *QueriesAdapter) CheckRecruiterRole(ctx context.Context, employeeID pgty
 	return a.q.CheckRecruiterRole(ctx, employeeID)
 }
 
+// GetActiveInterviewCount delegates to the underlying querier
+func (a *QueriesAdapter) GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+	return a.q.GetActiveInterviewCount(ctx, interviewerID)
+}
+
 // RequireAdmin middleware checks if the current user is an admin
 func RequireAdmin(queries *repository.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -97,8 +102,8 @@ func RequireRecruiter(queries *repository.Queries) gin.HandlerFunc {
 		}
 
 		// Check if recruiter
-		_, err = queries.CheckRecruiterRole(ctx, employee.ID)
-		if err != nil {
+		recruiterID, err := queries.CheckRecruiterRole(ctx, employee.ID)
+		if err != nil || !recruiterID.Valid {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Recruiter access required"})
 			return
 		}
@@ -138,8 +143,8 @@ func RequireRecruiterOrAdmin(queries *repository.Queries) gin.HandlerFunc {
 			return
 		}
 
-		_, err = queries.CheckRecruiterRole(ctx, employee.ID)
-		if err != nil {
+		recruiterID, err := queries.CheckRecruiterRole(ctx, employee.ID)
+		if err != nil || !recruiterID.Valid {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Recruiter access required"})
 			return
 		}
@@ -222,13 +227,25 @@ func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
 		}
 
 		// Recruiters can access interview resources for assignment and coordination.
-		if _, err := queries.CheckRecruiterRole(ctx, employee.ID); err == nil {
+		if recruiterID, err := queries.CheckRecruiterRole(ctx, employee.ID); err == nil && recruiterID.Valid {
 			c.Set("employeeID", uuidToString(employee.ID))
 			c.Next()
 			return
 		}
 
-		if !employee.CanReviewResumes {
+		// Backward compatibility: keep supporting explicit capability flags.
+		if employee.CanReviewResumes {
+			c.Set("employeeID", uuidToString(employee.ID))
+			c.Next()
+			return
+		}
+
+		activeInterviewCount, err := queries.GetActiveInterviewCount(ctx, employee.ID)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interviewer access"})
+			return
+		}
+		if activeInterviewCount <= 0 {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Interviewer access required"})
 			return
 		}

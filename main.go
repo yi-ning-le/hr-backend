@@ -35,6 +35,7 @@ func main() {
 	authService := service.NewAuthService(repo, cfg.JWTSecret, db.Pool)
 	employeeService := service.NewEmployeeService(repo, db.Pool)
 	candidateStatusService := service.NewCandidateStatusService(repo)
+	candidateCommentService := service.NewCandidateCommentService(repo)
 
 	// 5. Initialize Handlers
 	jobHandler := handler.NewJobHandler(jobService)
@@ -43,6 +44,7 @@ func main() {
 	employeeHandler := handler.NewEmployeeHandler(employeeService)
 	candidateStatusHandler := handler.NewCandidateStatusHandler(candidateStatusService)
 	recruitmentHandler := handler.NewRecruitmentHandler(repo)
+	candidateCommentHandler := handler.NewCandidateCommentHandler(candidateCommentService)
 
 	// 6. Setup Router
 	r := gin.Default()
@@ -102,7 +104,6 @@ func main() {
 		recruitmentWriteAPI.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
 		recruitmentWriteAPI.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
 		recruitmentWriteAPI.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
-		recruitmentWriteAPI.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
 		recruitmentWriteAPI.POST("/candidates/:id/resume", candidateHandler.UploadResume)
 		recruitmentWriteAPI.POST(
 			"/candidates/:id/assign-reviewer",
@@ -136,6 +137,11 @@ func main() {
 	reviewAPI.Use(middleware.RequireInterviewerOrRecruiter(hrQuerier))
 	{
 		reviewAPI.POST("/candidates/:id/review", candidateHandler.SubmitReview)
+
+		// Candidate Comments
+		reviewAPI.GET("/candidates/:id/comments", candidateCommentHandler.ListComments)
+		reviewAPI.POST("/candidates/:id/comments", candidateCommentHandler.CreateComment)
+		reviewAPI.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment)
 	}
 
 	// Admin only Recruitment Routes

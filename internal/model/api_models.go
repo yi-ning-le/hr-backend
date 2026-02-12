@@ -39,7 +39,6 @@ type Candidate struct {
 	Channel         string    `json:"channel"`
 	ResumeURL       string    `json:"resumeUrl"`
 	Status          string    `json:"status"`
-	Note            string    `json:"note,omitempty"`
 	AppliedAt       time.Time `json:"appliedAt"`
 	ReviewerID      string    `json:"reviewerId,omitempty"`
 	ReviewStatus    string    `json:"reviewStatus,omitempty"`
@@ -59,7 +58,6 @@ type CandidateInput struct {
 	Channel         string    `json:"channel" binding:"required"`
 	ResumeURL       string    `json:"resumeUrl" binding:"required"`
 	Status          string    `json:"status"` // Default new
-	Note            string    `json:"note"`
 	AppliedAt       time.Time `json:"appliedAt" binding:"required"`
 	ReviewerID      string    `json:"reviewerId"`
 }
@@ -106,6 +104,8 @@ type Employee struct {
 	JoinDate       time.Time `json:"joinDate"`
 	ManagerID      string    `json:"managerId,omitempty"`
 	UserID         string    `json:"userId,omitempty"`
+	// Only returned by employee creation API so HR can deliver first-login credentials.
+	TemporaryPassword string `json:"temporaryPassword,omitempty"`
 }
 
 type EmployeeInput struct {
@@ -153,4 +153,21 @@ type CreateInterviewInput struct {
 
 type UpdateInterviewNotesInput struct {
 	Notes string `json:"notes" binding:"required"`
+}
+
+// --- Candidate Comment Models ---
+
+type CandidateComment struct {
+	ID           string    `json:"id"`
+	CandidateID  string    `json:"candidateId"`
+	AuthorID     string    `json:"authorId"`
+	AuthorName   string    `json:"authorName"`
+	AuthorAvatar string    `json:"authorAvatar,omitempty"`
+	AuthorRole   string    `json:"authorRole"` // HR | INTERVIEWER
+	Content      string    `json:"content"`
+	CreatedAt    time.Time `json:"createdAt"`
+}
+
+type CreateCommentInput struct {
+	Content string `json:"content" binding:"required"`
 }

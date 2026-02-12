@@ -20,13 +20,20 @@ type Candidate struct {
 	Channel         string             `json:"channel"`
 	ResumeUrl       string             `json:"resume_url"`
 	Status          string             `json:"status"`
-	Note            pgtype.Text        `json:"note"`
 	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
 	ReviewNote      pgtype.Text        `json:"review_note"`
+}
+
+type CandidateComment struct {
+	ID          pgtype.UUID        `json:"id"`
+	CandidateID pgtype.UUID        `json:"candidate_id"`
+	AuthorID    pgtype.UUID        `json:"author_id"`
+	Content     string             `json:"content"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type CandidateStatus struct {

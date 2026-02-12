@@ -215,24 +215,6 @@ func (h *CandidateHandler) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, candidate)
 }
 
-func (h *CandidateHandler) UpdateNote(c *gin.Context) {
-	id := c.Param("id")
-	var req struct {
-		Note string `json:"note" binding:"required"`
-	}
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	candidate, err := h.service.UpdateNote(c.Request.Context(), id, req.Note)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-	c.JSON(http.StatusOK, candidate)
-}
-
 func (h *CandidateHandler) UploadResume(c *gin.Context) {
 	id := c.Param("id")
 	file, err := c.FormFile("file")

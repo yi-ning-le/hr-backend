@@ -3,11 +3,14 @@ package service
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 
 	"hr-backend/internal/repository"
 	"hr-backend/internal/utils"
 )
+
+var ErrInvalidStatusID = errors.New("invalid status id")
 
 type CandidateStatusService struct {
 	repo repository.Querier
@@ -91,13 +94,17 @@ func (s *CandidateStatusService) DeleteStatus(ctx context.Context, id string) er
 }
 
 func (s *CandidateStatusService) ReorderStatuses(ctx context.Context, ids []string) error {
+	parsedIDs := make([]string, len(ids))
 	for i, id := range ids {
-		uuid, err := utils.StringToUUID(id)
-		if err != nil {
-			continue
+		if _, err := utils.StringToUUID(id); err != nil {
+			return fmt.Errorf("%w at index %d", ErrInvalidStatusID, i)
 		}
+		parsedIDs[i] = id
+	}
 
-		err = s.repo.UpdateCandidateStatusOrder(ctx, repository.UpdateCandidateStatusOrderParams{
+	for i, id := range parsedIDs {
+		uuid, _ := utils.StringToUUID(id)
+		err := s.repo.UpdateCandidateStatusOrder(ctx, repository.UpdateCandidateStatusOrderParams{
 			ID:        uuid,
 			SortOrder: int32(i + 1),
 		})

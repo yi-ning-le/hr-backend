@@ -22,6 +22,8 @@ type Querier interface {
 	CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error)
 	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
+	// Candidate Comment queries
+	CreateCandidateComment(ctx context.Context, arg CreateCandidateCommentParams) (CandidateComment, error)
 	CreateCandidateStatus(ctx context.Context, arg CreateCandidateStatusParams) (CandidateStatus, error)
 	// Employee queries
 	CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error)
@@ -30,12 +32,14 @@ type Querier interface {
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	DeleteCandidate(ctx context.Context, id pgtype.UUID) error
+	DeleteCandidateComment(ctx context.Context, id pgtype.UUID) error
 	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
 	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
+	GetCandidateComment(ctx context.Context, id pgtype.UUID) (CandidateComment, error)
 	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)
 	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
 	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
@@ -46,6 +50,7 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error
+	ListCandidateComments(ctx context.Context, candidateID pgtype.UUID) ([]ListCandidateCommentsRow, error)
 	// Candidate Status queries
 	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
 	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)
@@ -59,7 +64,6 @@ type Querier interface {
 	SubmitReview(ctx context.Context, arg SubmitReviewParams) (SubmitReviewRow, error)
 	TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error)
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)
-	UpdateCandidateNote(ctx context.Context, arg UpdateCandidateNoteParams) (Candidate, error)
 	UpdateCandidateResume(ctx context.Context, arg UpdateCandidateResumeParams) (Candidate, error)
 	UpdateCandidateStatus(ctx context.Context, arg UpdateCandidateStatusParams) (Candidate, error)
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)

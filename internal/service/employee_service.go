@@ -122,7 +122,9 @@ func (s *EmployeeService) CreateEmployee(ctx context.Context, input model.Employ
 		emp = createdEmployee
 	}
 
-	return mapEmployeeToModel(emp), nil
+	created := mapEmployeeToModel(emp)
+	created.TemporaryPassword = temporaryPassword
+	return created, nil
 }
 
 func generateTemporaryPassword() (string, error) {
@@ -212,6 +214,11 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id string, input m
 		return nil, err
 	}
 
+	currentEmployee, err := s.repo.GetEmployee(ctx, uuid)
+	if err != nil {
+		return nil, err
+	}
+
 	var managerID pgtype.UUID
 	if input.ManagerID != "" {
 		managerID, err = utils.StringToUUID(input.ManagerID)
@@ -220,7 +227,7 @@ func (s *EmployeeService) UpdateEmployee(ctx context.Context, id string, input m
 		}
 	}
 
-	var userID pgtype.UUID
+	userID := currentEmployee.UserID
 	if input.UserID != "" {
 		userID, err = utils.StringToUUID(input.UserID)
 		if err != nil {

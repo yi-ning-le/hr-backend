@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"hr-backend/internal/service"
@@ -81,6 +82,10 @@ func (h *CandidateStatusHandler) ReorderStatuses(c *gin.Context) {
 	}
 
 	if err := h.service.ReorderStatuses(c.Request.Context(), req.IDs); err != nil {
+		if errors.Is(err, service.ErrInvalidStatusID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

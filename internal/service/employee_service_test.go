@@ -84,6 +84,9 @@ func TestCreateEmployee_AutoCreatesUser(t *testing.T) {
 	if employee.FirstName != input.FirstName {
 		t.Errorf("expected firstName %s, got %s", input.FirstName, employee.FirstName)
 	}
+	if employee.TemporaryPassword == "" {
+		t.Error("expected temporaryPassword to be returned for first login delivery")
+	}
 	if employee.Status != "Active" {
 		t.Errorf("expected default status Active, got %s", employee.Status)
 	}
@@ -284,4 +287,53 @@ func TestDeleteEmployee(t *testing.T) {
 	if !deleteCalled {
 		t.Error("expected DeleteEmployee to be called")
 	}
+}
+
+func TestUpdateEmployee_PreservesUserIDWhenInputEmpty(t *testing.T) {
+	employeeIDStr := "11111111-1111-1111-1111-111111111111"
+	existingUserIDStr := "22222222-2222-2222-2222-222222222222"
+
+	var employeeID, existingUserID pgtype.UUID
+	if err := employeeID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
+	if err := existingUserID.Scan(existingUserIDStr); err != nil {
+		t.Fatalf("failed to scan existing user id: %v", err)
+	}
+
+	var captured repository.UpdateEmployeeParams
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:     id,
+				UserID: existingUserID,
+			}, nil
+		},
+		UpdateEmployeeFunc: func(ctx context.Context, arg repository.UpdateEmployeeParams) (repository.Employee, error) {
+			captured = arg
+			return repository.Employee{
+				ID:     arg.ID,
+				UserID: arg.UserID,
+			}, nil
+		},
+	}
+
+	svc := service.NewEmployeeService(mockRepo)
+	_, err := svc.UpdateEmployee(context.Background(), employeeIDStr, model.EmployeeInput{
+		FirstName:      "A",
+		LastName:       "B",
+		Email:          "ab@example.com",
+		Phone:          "1",
+		Department:     "D",
+		Position:       "P",
+		Status:         "Active",
+		EmploymentType: "FullTime",
+		JoinDate:       time.Now(),
+		UserID:         "",
+	})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	assert.Equal(t, existingUserID, captured.UserID)
 }

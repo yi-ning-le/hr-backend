@@ -1,0 +1,2 @@
+ALTER TABLE candidates
+DROP COLUMN IF EXISTS note;

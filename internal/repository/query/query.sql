@@ -40,9 +40,9 @@ WHERE id = $1;
 
 -- name: CreateCandidate :one
 INSERT INTO candidates (
-  name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, note, applied_at
+  name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
 RETURNING *;
 
@@ -96,8 +96,7 @@ SET name = $2,
     channel = $9,
     resume_url = $10,
     status = $11,
-    note = $12,
-    applied_at = $13,
+    applied_at = $12,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
@@ -105,13 +104,6 @@ RETURNING *;
 -- name: UpdateCandidateStatus :one
 UPDATE candidates
 SET status = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateCandidateNote :one
-UPDATE candidates
-SET note = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
@@ -130,7 +122,7 @@ SET reviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
 
 -- name: SubmitReview :one
 UPDATE candidates c
@@ -139,7 +131,7 @@ SET review_status = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.note, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
 
 -- name: DeleteCandidate :exec
 DELETE FROM candidates
@@ -351,3 +343,35 @@ FROM employees e
 JOIN users u ON e.user_id = u.id
 WHERE e.employee_type = 'HR' AND u.is_admin = false
 ORDER BY e.first_name;
+
+-- Candidate Comment queries
+
+-- name: CreateCandidateComment :one
+INSERT INTO candidate_comments (
+    candidate_id, author_id, content
+) VALUES (
+    $1, $2, $3
+)
+RETURNING *;
+
+-- name: ListCandidateComments :many
+SELECT 
+    cc.*,
+    e.first_name || ' ' || e.last_name as author_name,
+    u.avatar as author_avatar,
+    CASE 
+        WHEN e.employee_type = 'HR' OR rr.employee_id IS NOT NULL THEN 'HR'
+        ELSE 'INTERVIEWER'
+    END as author_role
+FROM candidate_comments cc
+JOIN employees e ON cc.author_id = e.id
+JOIN users u ON e.user_id = u.id
+LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id
+WHERE cc.candidate_id = $1
+ORDER BY cc.created_at DESC;
+
+-- name: GetCandidateComment :one
+SELECT * FROM candidate_comments WHERE id = $1 LIMIT 1;
+
+-- name: DeleteCandidateComment :exec
+DELETE FROM candidate_comments WHERE id = $1;

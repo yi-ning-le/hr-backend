@@ -48,7 +48,6 @@ func (s *CandidateService) CreateCandidate(ctx context.Context, input model.Cand
 		Channel:         input.Channel,
 		ResumeUrl:       input.ResumeURL,
 		Status:          status,
-		Note:            pgtype.Text{String: input.Note, Valid: input.Note != ""},
 		AppliedAt:       pgtype.Timestamptz{Time: input.AppliedAt, Valid: true},
 	}
 
@@ -233,7 +232,6 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		Channel:         row.Channel,
 		ResumeURL:       row.ResumeUrl,
 		Status:          row.Status,
-		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
@@ -264,7 +262,6 @@ func (s *CandidateService) UpdateCandidate(ctx context.Context, id string, input
 		Channel:         input.Channel,
 		ResumeUrl:       input.ResumeURL,
 		Status:          input.Status,
-		Note:            pgtype.Text{String: input.Note, Valid: input.Note != ""},
 		AppliedAt:       pgtype.Timestamptz{Time: input.AppliedAt, Valid: true},
 	}
 
@@ -285,22 +282,6 @@ func (s *CandidateService) UpdateStatus(ctx context.Context, id string, status s
 	_, err = s.repo.UpdateCandidateStatus(ctx, repository.UpdateCandidateStatusParams{
 		ID:     uuid,
 		Status: status,
-	})
-	if err != nil {
-		return nil, err
-	}
-	return s.GetCandidate(ctx, id)
-}
-
-func (s *CandidateService) UpdateNote(ctx context.Context, id string, note string) (*model.Candidate, error) {
-	uuid, err := utils.StringToUUID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.repo.UpdateCandidateNote(ctx, repository.UpdateCandidateNoteParams{
-		ID:   uuid,
-		Note: pgtype.Text{String: note, Valid: true},
 	})
 	if err != nil {
 		return nil, err
@@ -346,7 +327,6 @@ func mapCandidateRowToModel(row repository.ListCandidatesRow) model.Candidate {
 		Channel:         row.Channel,
 		ResumeURL:       row.ResumeUrl,
 		Status:          row.Status,
-		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
@@ -368,7 +348,6 @@ func mapAssignReviewerRowToModel(row repository.AssignReviewerRow) *model.Candid
 		Channel:         row.Channel,
 		ResumeURL:       row.ResumeUrl,
 		Status:          row.Status,
-		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
@@ -390,7 +369,6 @@ func mapSubmitReviewRowToModel(row repository.SubmitReviewRow) *model.Candidate 
 		Channel:         row.Channel,
 		ResumeURL:       row.ResumeUrl,
 		Status:          row.Status,
-		Note:            row.Note.String,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,

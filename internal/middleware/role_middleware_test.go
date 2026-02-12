@@ -308,6 +308,55 @@ func TestRequireInterviewerOrRecruiter_AllowsReviewerCapability(t *testing.T) {
 	}
 }
 
+func TestRequireInterviewerOrRecruiter_AllowsActiveInterviewerWithoutLegacyFlag(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "01010101-0101-0101-0101-010101010101"
+	var employeeIDUUID pgtype.UUID
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return false, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:               employeeIDUUID,
+				CanReviewResumes: false,
+			}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return pgtype.UUID{}, errors.New("not recruiter")
+		},
+		GetActiveInterviewCountFunc: func(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+			return 2, nil
+		},
+	}
+
+	queries := middleware.NewQueriesAdapter(mockRepo)
+	mw := middleware.RequireInterviewerOrRecruiter(queries)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.Use(mw)
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d, body: %s", w.Code, w.Body.String())
+	}
+}
+
 func TestRequireInterviewerOrRecruiter_RejectsAdminWithoutEmployeeProfile(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
