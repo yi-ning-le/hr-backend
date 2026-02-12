@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type CandidateHandler struct {
@@ -143,8 +145,43 @@ func (h *CandidateHandler) SubmitReview(c *gin.Context) {
 		return
 	}
 
-	candidate, err := h.service.SubmitReview(c.Request.Context(), id, reviewStatus, req.ReviewNote)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userIDStr, ok := userID.(string)
+	if !ok || userIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	candidate, err := h.service.SubmitReview(
+		c.Request.Context(),
+		id,
+		userIDStr,
+		reviewStatus,
+		req.ReviewNote,
+	)
 	if err != nil {
+		if errors.Is(err, service.ErrReviewPermissionDenied) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Only assigned reviewer can submit review"})
+			return
+		}
+		if errors.Is(err, service.ErrReviewerProfileNotFound) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "Current user has no linked employee profile"})
+			return
+		}
+		if errors.Is(err, service.ErrCandidateNotFound) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Candidate not found"})
+			return
+		}
+		// Keep legacy fallback for older service implementations.
+		if errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Candidate not found"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

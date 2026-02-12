@@ -161,7 +161,7 @@ func TestGetMyRole_UsesExplicitReviewCapability(t *testing.T) {
 	}
 }
 
-func TestGetMyRole_NoEmployeeKeepsAdminCapability(t *testing.T) {
+func TestGetMyRole_NoEmployeeDoesNotGrantReviewCapability(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	userIDStr := "7111b81e-bd11-471a-96e0-24927f906d1e"
@@ -200,7 +200,7 @@ func TestGetMyRole_NoEmployeeKeepsAdminCapability(t *testing.T) {
 	if !result.IsAdmin {
 		t.Errorf("expected isAdmin=true")
 	}
-	if !result.CanReviewResumes {
-		t.Errorf("expected canReviewResumes=true for admin without employee profile")
+	if result.CanReviewResumes {
+		t.Errorf("expected canReviewResumes=false for admin without employee profile")
 	}
 }

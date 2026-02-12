@@ -15,6 +15,7 @@ import (
 	"hr-backend/test/mocks"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -108,11 +109,23 @@ func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	userIDStr := "00000000-0000-0000-0000-000000000003"
 	var candidateID pgtype.UUID
 	candidateID.Scan(candidateIDStr)
+	var reviewerEmployeeID pgtype.UUID
+	reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002")
 
 	submitCalled := false
 	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: reviewerEmployeeID}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:         candidateID,
+				ReviewerID: reviewerEmployeeID,
+			}, nil
+		},
 		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
 			submitCalled = true
 			if arg.ReviewStatus.String != "suitable" {
@@ -133,6 +146,10 @@ func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
 	h := handler.NewCandidateHandler(svc)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
 	r.POST("/candidates/:id/review", h.SubmitReview)
 
 	body, _ := json.Marshal(map[string]string{
@@ -154,5 +171,109 @@ func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
 	}
 	if !submitCalled {
 		t.Error("expected SubmitReview to be called")
+	}
+}
+
+func TestSubmitReviewHandler_ReturnsForbiddenWhenNoEmployeeProfile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	userIDStr := "00000000-0000-0000-0000-000000000003"
+	submitCalled := false
+
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{}, pgx.ErrNoRows
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			submitCalled = true
+			return repository.SubmitReviewRow{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.POST("/candidates/:id/review", h.SubmitReview)
+
+	body, _ := json.Marshal(map[string]string{
+		"reviewStatus": "suitable",
+		"reviewNote":   "strong fit",
+	})
+	req, _ := http.NewRequest(
+		"POST",
+		"/candidates/"+candidateIDStr+"/review",
+		bytes.NewBuffer(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d body=%s", w.Code, w.Body.String())
+	}
+	if submitCalled {
+		t.Error("expected SubmitReview not to be called")
+	}
+}
+
+func TestSubmitReviewHandler_ReturnsNotFoundWhenCandidateMissing(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	userIDStr := "00000000-0000-0000-0000-000000000003"
+	submitCalled := false
+
+	var reviewerEmployeeID pgtype.UUID
+	reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002")
+
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: reviewerEmployeeID}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{}, pgx.ErrNoRows
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			submitCalled = true
+			return repository.SubmitReviewRow{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.POST("/candidates/:id/review", h.SubmitReview)
+
+	body, _ := json.Marshal(map[string]string{
+		"reviewStatus": "suitable",
+		"reviewNote":   "strong fit",
+	})
+	req, _ := http.NewRequest(
+		"POST",
+		"/candidates/"+candidateIDStr+"/review",
+		bytes.NewBuffer(body),
+	)
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404, got %d body=%s", w.Code, w.Body.String())
+	}
+	if submitCalled {
+		t.Error("expected SubmitReview not to be called")
 	}
 }

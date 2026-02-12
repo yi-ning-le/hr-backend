@@ -83,6 +83,12 @@ func RequireRecruiter(queries *repository.Queries) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
+		isAdmin, err := queries.CheckIsAdmin(ctx, userID)
+		if err == nil && isAdmin {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin account is isolated from recruiter endpoints"})
+			return
+		}
+
 		// Get employee by user ID
 		employee, err := queries.GetEmployeeByUserID(ctx, userID)
 		if err != nil {
@@ -160,6 +166,12 @@ func RequireHR(queries *QueriesAdapter) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
+		isAdmin, err := queries.CheckIsAdmin(ctx, userID)
+		if err == nil && isAdmin {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin account is isolated from HR endpoints"})
+			return
+		}
+
 		// Get employee by user ID
 		employee, err := queries.GetEmployeeByUserID(ctx, userID)
 		if err != nil {
@@ -196,10 +208,10 @@ func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
-		// Admin users always pass.
+		// Strict isolation: admins cannot access interviewer/recruiter endpoints.
 		isAdmin, err := queries.CheckIsAdmin(ctx, userID)
 		if err == nil && isAdmin {
-			c.Next()
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Admin account is isolated from interviewer endpoints"})
 			return
 		}
 

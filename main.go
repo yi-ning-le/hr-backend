@@ -89,7 +89,7 @@ func main() {
 
 	recruitmentWriteAPI := r.Group("/")
 	recruitmentWriteAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
-	recruitmentWriteAPI.Use(middleware.RequireRecruiterOrAdmin(repo))
+	recruitmentWriteAPI.Use(middleware.RequireRecruiter(repo))
 	{
 		// Job write routes
 		recruitmentWriteAPI.POST("/jobs", jobHandler.CreateJob)
@@ -97,13 +97,17 @@ func main() {
 		recruitmentWriteAPI.DELETE("/jobs/:id", jobHandler.DeleteJob)
 		recruitmentWriteAPI.PATCH("/jobs/:id/status", jobHandler.ToggleStatus)
 
-		// Candidate write routes
+		// Candidate write routes (recruiter only; admin strictly isolated)
 		recruitmentWriteAPI.POST("/candidates", candidateHandler.CreateCandidate)
+		recruitmentWriteAPI.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
+		recruitmentWriteAPI.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
+		recruitmentWriteAPI.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
+		recruitmentWriteAPI.PATCH("/candidates/:id/note", candidateHandler.UpdateNote)
+		recruitmentWriteAPI.POST("/candidates/:id/resume", candidateHandler.UploadResume)
 		recruitmentWriteAPI.POST(
 			"/candidates/:id/assign-reviewer",
 			candidateHandler.AssignReviewer,
 		)
-		recruitmentWriteAPI.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 
 		// Candidate status write routes
 		recruitmentWriteAPI.POST("/candidate-statuses", candidateStatusHandler.CreateStatus)
@@ -124,6 +128,14 @@ func main() {
 		hrApi.POST("/employees", employeeHandler.CreateEmployee)
 		hrApi.PUT("/employees/:id", employeeHandler.UpdateEmployee)
 		hrApi.DELETE("/employees/:id", employeeHandler.DeleteEmployee)
+	}
+
+	// Reviewer-only action (resolved by candidate assignment check in handler/service)
+	reviewAPI := r.Group("/")
+	reviewAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	reviewAPI.Use(middleware.RequireInterviewerOrRecruiter(hrQuerier))
+	{
+		reviewAPI.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 	}
 
 	// Admin only Recruitment Routes

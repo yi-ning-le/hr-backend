@@ -95,6 +95,47 @@ func TestRequireHR_NotHR(t *testing.T) {
 	}
 }
 
+func TestRequireHR_RejectsAdmin(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "01010101-0101-0101-0101-010101010101"
+	var employeeIDUUID pgtype.UUID
+	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:           employeeIDUUID,
+				EmployeeType: "HR",
+			}, nil
+		},
+	}
+
+	queries := middleware.NewQueriesAdapter(mockRepo)
+	mw := middleware.RequireHR(queries)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.Use(mw)
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
 func TestRequireHR_NoUserID(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -248,5 +289,82 @@ func TestRequireInterviewerOrRecruiter_AllowsReviewerCapability(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("expected 200, got %d, body: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestRequireInterviewerOrRecruiter_RejectsAdminWithoutEmployeeProfile(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "01010101-0101-0101-0101-010101010101"
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{}, errors.New("not found")
+		},
+	}
+
+	queries := middleware.NewQueriesAdapter(mockRepo)
+	mw := middleware.RequireInterviewerOrRecruiter(queries)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.Use(mw)
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
+	}
+}
+
+func TestRequireInterviewerOrRecruiter_RejectsAdminEvenWithRecruiterRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "01010101-0101-0101-0101-010101010101"
+	var employeeIDUUID pgtype.UUID
+	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return true, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: employeeIDUUID, CanReviewResumes: true}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return employeeID, nil
+		},
+	}
+
+	queries := middleware.NewQueriesAdapter(mockRepo)
+	mw := middleware.RequireInterviewerOrRecruiter(queries)
+
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.Use(mw)
+	r.GET("/test", func(c *gin.Context) {
+		c.Status(http.StatusOK)
+	})
+
+	req, _ := http.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("expected 403, got %d", w.Code)
 	}
 }

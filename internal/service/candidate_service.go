@@ -2,17 +2,25 @@ package service
 
 import (
 	"context"
+	"errors"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
 	"hr-backend/internal/utils"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type CandidateService struct {
 	repo repository.Querier
 }
+
+var (
+	ErrReviewPermissionDenied  = errors.New("only assigned reviewer can submit review")
+	ErrReviewerProfileNotFound = errors.New("reviewer profile not found")
+	ErrCandidateNotFound       = errors.New("candidate not found")
+)
 
 func NewCandidateService(repo repository.Querier) *CandidateService {
 	return &CandidateService{repo: repo}
@@ -159,14 +167,39 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 	return mapAssignReviewerRowToModel(row), nil
 }
 
-func (s *CandidateService) SubmitReview(ctx context.Context, id string, status string, note string) (*model.Candidate, error) {
-	uuid, err := utils.StringToUUID(id)
+func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID string, status string, note string) (*model.Candidate, error) {
+	candidateID, err := utils.StringToUUID(id)
 	if err != nil {
 		return nil, err
 	}
 
+	userUUID, err := utils.StringToUUID(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	employee, err := s.repo.GetEmployeeByUserID(ctx, userUUID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrReviewerProfileNotFound
+		}
+		return nil, err
+	}
+
+	candidate, err := s.repo.GetCandidate(ctx, candidateID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, ErrCandidateNotFound
+		}
+		return nil, err
+	}
+
+	if !candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID) {
+		return nil, ErrReviewPermissionDenied
+	}
+
 	row, err := s.repo.SubmitReview(ctx, repository.SubmitReviewParams{
-		ID:           uuid,
+		ID:           candidateID,
 		ReviewStatus: pgtype.Text{String: status, Valid: true},
 		ReviewNote:   pgtype.Text{String: note, Valid: true},
 	})

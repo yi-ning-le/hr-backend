@@ -44,19 +44,13 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 ### Installation
 
 1. Clone the repository
-2. Install dependencies:
+2. Set up the development environment (installs tools and git hooks):
 
    ```bash
-   go mod download
+   make setup
    ```
 
-3. Install sqlc CLI:
-
-   ```bash
-   go install github.com/sqlc-dev/sqlc/cmd/sqlc@latest
-   ```
-
-4. Set up environment variables:
+3. Set up environment variables:
 
    ```bash
    export SERVER_PORT=8080

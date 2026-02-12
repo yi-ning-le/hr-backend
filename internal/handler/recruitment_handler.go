@@ -45,13 +45,13 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	// Get employee by user ID
 	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
 	if err != nil {
-		// User has no employee record, return minimal response
+		// User has no employee record.
 		c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
 			IsAdmin:          isAdmin,
 			IsRecruiter:      false,
 			IsInterviewer:    false,
 			IsHR:             false,
-			CanReviewResumes: isAdmin,
+			CanReviewResumes: false,
 		})
 		return
 	}
@@ -60,8 +60,7 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	_, err = h.queries.CheckRecruiterRole(ctx, employee.ID)
 	isRecruiter := err == nil
 
-	// Resume review capability is explicitly modeled on employee capability.
-	canReviewResumes := isAdmin || isRecruiter || employee.CanReviewResumes
+	canReviewResumes := employee.CanReviewResumes
 
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
@@ -69,7 +68,7 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
 		IsAdmin:          isAdmin,
 		IsRecruiter:      isRecruiter,
-		IsInterviewer:    employee.CanReviewResumes, // Backward compatible alias.
+		IsInterviewer:    canReviewResumes, // Backward compatible alias.
 		IsHR:             isHR,
 		CanReviewResumes: canReviewResumes,
 	})
@@ -491,11 +490,6 @@ func (h *RecruitmentHandler) canAccessInterviewByInterviewer(
 	userID pgtype.UUID,
 	interviewerID pgtype.UUID,
 ) (bool, error) {
-	isAdmin, err := h.queries.CheckIsAdmin(ctx, userID)
-	if err == nil && isAdmin {
-		return true, nil
-	}
-
 	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
 	if err != nil {
 		return false, nil

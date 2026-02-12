@@ -1,0 +1,27 @@
+# lefthook.yml
+# 官方文档: https://github.com/evilmartians/lefthook
+
+pre-commit:
+  parallel: true
+  commands:
+    # 1. 自动格式化 Go 代码 (对整个项目运行，避免 staged_files 跨目录问题)
+    go-fmt:
+      run: go fmt ./...
+
+    # 2. 静态代码检查 (对整个项目运行)
+    go-lint:
+      run: golangci-lint run ./...
+
+    # 3. SQLC 一致性检查
+    # 如果修改了 SQL 文件但忘记运行 sqlc generate，此步骤会拦截
+    sqlc-generate-check:
+      glob: "internal/repository/query/*.sql"
+      run: |
+        sqlc generate
+        git diff --exit-code internal/repository/
+
+    # 4. 核心逻辑单元测试
+    # 确保提交的代码不会破坏 Service 层的业务逻辑
+    go-test:
+      glob: "*.go"
+      run: go test -short ./...

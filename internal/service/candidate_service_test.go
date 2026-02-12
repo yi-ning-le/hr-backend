@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"hr-backend/internal/service"
 	"hr-backend/test/mocks"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -106,5 +108,96 @@ func TestUpdateCandidate(t *testing.T) {
 
 	if updated.Name != "New Name" {
 		t.Errorf("expected name New Name, got %s", updated.Name)
+	}
+}
+
+func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	userIDStr := "00000000-0000-0000-0000-000000000002"
+
+	var candidateID pgtype.UUID
+	candidateID.Scan(candidateIDStr)
+
+	var userID pgtype.UUID
+	userID.Scan(userIDStr)
+
+	var actorEmployeeID pgtype.UUID
+	actorEmployeeID.Scan("00000000-0000-0000-0000-000000000003")
+
+	var assignedReviewerID pgtype.UUID
+	assignedReviewerID.Scan("00000000-0000-0000-0000-000000000004")
+
+	submitCalled := false
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: actorEmployeeID, UserID: userID}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:         candidateID,
+				ReviewerID: assignedReviewerID,
+			}, nil
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			submitCalled = true
+			return repository.SubmitReviewRow{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable", "note")
+	if !errors.Is(err, service.ErrReviewPermissionDenied) {
+		t.Fatalf("expected ErrReviewPermissionDenied, got %v", err)
+	}
+	if submitCalled {
+		t.Fatalf("expected SubmitReview not to be called when reviewer is not assigned")
+	}
+}
+
+func TestSubmitReview_ReviewerProfileNotFound(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{}, pgx.ErrNoRows
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(
+		context.Background(),
+		"00000000-0000-0000-0000-000000000001",
+		"00000000-0000-0000-0000-000000000002",
+		"suitable",
+		"note",
+	)
+
+	if !errors.Is(err, service.ErrReviewerProfileNotFound) {
+		t.Fatalf("expected ErrReviewerProfileNotFound, got %v", err)
+	}
+}
+
+func TestSubmitReview_CandidateNotFound(t *testing.T) {
+	var employeeID pgtype.UUID
+	employeeID.Scan("00000000-0000-0000-0000-000000000003")
+
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{ID: employeeID, UserID: id}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{}, pgx.ErrNoRows
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(
+		context.Background(),
+		"00000000-0000-0000-0000-000000000001",
+		"00000000-0000-0000-0000-000000000002",
+		"suitable",
+		"note",
+	)
+
+	if !errors.Is(err, service.ErrCandidateNotFound) {
+		t.Fatalf("expected ErrCandidateNotFound, got %v", err)
 	}
 }
