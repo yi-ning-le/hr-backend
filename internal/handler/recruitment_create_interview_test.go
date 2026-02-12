@@ -27,9 +27,15 @@ func TestCreateInterview(t *testing.T) {
 	jobIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var candidateID, interviewerID, jobID pgtype.UUID
-	candidateID.Scan(candidateIDStr)
-	interviewerID.Scan(interviewerIDStr)
-	jobID.Scan(jobIDStr)
+	if err := candidateID.Scan(candidateIDStr); err != nil {
+		t.Fatalf("failed to scan candidate id: %v", err)
+	}
+	if err := interviewerID.Scan(interviewerIDStr); err != nil {
+		t.Fatalf("failed to scan interviewer id: %v", err)
+	}
+	if err := jobID.Scan(jobIDStr); err != nil {
+		t.Fatalf("failed to scan job id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
@@ -85,11 +91,15 @@ func TestGetMyInterviews(t *testing.T) {
 
 	userIDStr := "11111111-1111-1111-1111-111111111111"
 	var userID pgtype.UUID
-	userID.Scan(userIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
 
 	employeeIDStr := "22222222-2222-2222-2222-222222222222"
 	var employeeID pgtype.UUID
-	employeeID.Scan(employeeIDStr)
+	if err := employeeID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, uid pgtype.UUID) (repository.Employee, error) {
@@ -143,11 +153,17 @@ func TestGetInterview(t *testing.T) {
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var userID, employeeID pgtype.UUID
-	userID.Scan(userIDStr)
-	employeeID.Scan(employeeIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
+	if err := employeeID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	var interviewID pgtype.UUID
-	interviewID.Scan(interviewIDStr)
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
@@ -202,11 +218,17 @@ func TestUpdateInterviewNotes(t *testing.T) {
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var userID, employeeID pgtype.UUID
-	userID.Scan(userIDStr)
-	employeeID.Scan(employeeIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
+	if err := employeeID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	var interviewID pgtype.UUID
-	interviewID.Scan(interviewIDStr)
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
 
 	newNotes := "Great candidate!"
 
@@ -279,10 +301,18 @@ func TestGetInterview_ForbiddenForNonOwner(t *testing.T) {
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var userID, ownerEmployeeID, requesterEmployeeID, interviewID pgtype.UUID
-	userID.Scan(userIDStr)
-	ownerEmployeeID.Scan(ownerEmployeeIDStr)
-	requesterEmployeeID.Scan(requesterEmployeeIDStr)
-	interviewID.Scan(interviewIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
+	if err := ownerEmployeeID.Scan(ownerEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan owner employee id: %v", err)
+	}
+	if err := requesterEmployeeID.Scan(requesterEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan requester employee id: %v", err)
+	}
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
@@ -323,10 +353,18 @@ func TestUpdateInterviewNotes_ForbiddenForNonOwner(t *testing.T) {
 	interviewIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var userID, ownerEmployeeID, requesterEmployeeID, interviewID pgtype.UUID
-	userID.Scan(userIDStr)
-	ownerEmployeeID.Scan(ownerEmployeeIDStr)
-	requesterEmployeeID.Scan(requesterEmployeeIDStr)
-	interviewID.Scan(interviewIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
+	if err := ownerEmployeeID.Scan(ownerEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan owner employee id: %v", err)
+	}
+	if err := requesterEmployeeID.Scan(requesterEmployeeIDStr); err != nil {
+		t.Fatalf("failed to scan requester employee id: %v", err)
+	}
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
 
 	updateCalled := false
 	mockRepo := &mocks.MockQuerier{

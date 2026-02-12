@@ -56,7 +56,9 @@ func TestCreateJob(t *testing.T) {
 func TestToggleJobStatus(t *testing.T) {
 	jobIDStr := "01010101-0101-0101-0101-010101010101"
 	var jobIDUUID pgtype.UUID
-	jobIDUUID.Scan(jobIDStr)
+	if err := jobIDUUID.Scan(jobIDStr); err != nil {
+		t.Fatalf("failed to scan job id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetJobFunc: func(ctx context.Context, id pgtype.UUID) (repository.Job, error) {

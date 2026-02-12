@@ -22,7 +22,9 @@ func runInTx(
 		return err
 	}
 
-	defer tx.Rollback(ctx)
+	defer func() {
+		_ = tx.Rollback(ctx)
+	}()
 
 	txQueries := repository.New(tx)
 	if err := run(txQueries); err != nil {

@@ -244,7 +244,10 @@ func (h *CandidateHandler) UploadResume(c *gin.Context) {
 	// Ensure uploads directory exists
 	uploadDir := "./uploads"
 	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		os.Mkdir(uploadDir, 0755)
+		if err := os.Mkdir(uploadDir, 0755); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
+			return
+		}
 	}
 
 	// Generate filename

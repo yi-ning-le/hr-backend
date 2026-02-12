@@ -20,11 +20,15 @@ func TestRequireHR_Success(t *testing.T) {
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var userIDUUID pgtype.UUID
-	userIDUUID.Scan(userIDStr)
+	if err := userIDUUID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
 
 	employeeIDStr := "02020202-0202-0202-0202-020202020202"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan(employeeIDStr)
+	if err := employeeIDUUID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
@@ -62,7 +66,9 @@ func TestRequireHR_NotHR(t *testing.T) {
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
@@ -100,7 +106,9 @@ func TestRequireHR_RejectsAdmin(t *testing.T) {
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
@@ -165,7 +173,9 @@ func TestRequireInterviewerOrRecruiter_AllowsRecruiter(t *testing.T) {
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
@@ -206,10 +216,14 @@ func TestRequireInterviewerOrRecruiter_RejectsNonInterviewer(t *testing.T) {
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var userIDUUID pgtype.UUID
-	userIDUUID.Scan(userIDStr)
+	if err := userIDUUID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
 
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
@@ -253,7 +267,9 @@ func TestRequireInterviewerOrRecruiter_AllowsReviewerCapability(t *testing.T) {
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
@@ -333,7 +349,9 @@ func TestRequireInterviewerOrRecruiter_RejectsAdminEvenWithRecruiterRole(t *test
 
 	userIDStr := "01010101-0101-0101-0101-010101010101"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202")
+	if err := employeeIDUUID.Scan("02020202-0202-0202-0202-020202020202"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {

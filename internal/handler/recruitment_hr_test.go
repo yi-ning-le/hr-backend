@@ -22,7 +22,9 @@ func TestGetHRs(t *testing.T) {
 
 	employeeIDStr := "5111b81e-bd11-471a-96e0-24927f906d1e"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan(employeeIDStr)
+	if err := employeeIDUUID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		ListHRsFunc: func(ctx context.Context) ([]repository.ListHRsRow, error) {
@@ -70,7 +72,9 @@ func TestAssignHR(t *testing.T) {
 
 	employeeIDStr := "5111b81e-bd11-471a-96e0-24927f906d1e"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan(employeeIDStr)
+	if err := employeeIDUUID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	var capturedID pgtype.UUID
 	mockRepo := &mocks.MockQuerier{
@@ -106,7 +110,9 @@ func TestRevokeHR(t *testing.T) {
 
 	employeeIDStr := "5111b81e-bd11-471a-96e0-24927f906d1e"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan(employeeIDStr)
+	if err := employeeIDUUID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	var capturedID pgtype.UUID
 	mockRepo := &mocks.MockQuerier{

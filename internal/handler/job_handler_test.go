@@ -48,7 +48,9 @@ func TestListJobsHandler(t *testing.T) {
 	}
 
 	var jobs []model.JobPosition
-	json.Unmarshal(w.Body.Bytes(), &jobs)
+	if err := json.Unmarshal(w.Body.Bytes(), &jobs); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
 	if len(jobs) != 1 {
 		t.Errorf("expected 1 job, got %d", len(jobs))
 	}

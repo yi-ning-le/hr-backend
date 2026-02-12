@@ -183,7 +183,9 @@ func TestCreateEmployee_HR(t *testing.T) {
 func TestGetEmployee(t *testing.T) {
 	employeeIDStr := "01010101-0101-0101-0101-010101010101"
 	var employeeIDUUID pgtype.UUID
-	employeeIDUUID.Scan(employeeIDStr)
+	if err := employeeIDUUID.Scan(employeeIDStr); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {

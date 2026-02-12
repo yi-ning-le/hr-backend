@@ -111,9 +111,13 @@ func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
 	candidateIDStr := "00000000-0000-0000-0000-000000000001"
 	userIDStr := "00000000-0000-0000-0000-000000000003"
 	var candidateID pgtype.UUID
-	candidateID.Scan(candidateIDStr)
+	if err := candidateID.Scan(candidateIDStr); err != nil {
+		t.Fatalf("failed to scan candidate id: %v", err)
+	}
 	var reviewerEmployeeID pgtype.UUID
-	reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002")
+	if err := reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002"); err != nil {
+		t.Fatalf("failed to scan reviewer employee id: %v", err)
+	}
 
 	submitCalled := false
 	mockRepo := &mocks.MockQuerier{
@@ -231,7 +235,9 @@ func TestSubmitReviewHandler_ReturnsNotFoundWhenCandidateMissing(t *testing.T) {
 	submitCalled := false
 
 	var reviewerEmployeeID pgtype.UUID
-	reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002")
+	if err := reviewerEmployeeID.Scan("00000000-0000-0000-0000-000000000002"); err != nil {
+		t.Fatalf("failed to scan reviewer employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {

@@ -75,13 +75,13 @@ func main() {
 
 				_, err = tx.Exec(ctx, string(content))
 				if err != nil {
-					tx.Rollback(ctx)
+					_ = tx.Rollback(ctx)
 					log.Fatalf("Failed to execute migration %s: %v", version, err)
 				}
 
 				_, err = tx.Exec(ctx, "INSERT INTO schema_migrations (version) VALUES ($1)", version)
 				if err != nil {
-					tx.Rollback(ctx)
+					_ = tx.Rollback(ctx)
 					log.Fatalf("Failed to record migration %s: %v", version, err)
 				}
 

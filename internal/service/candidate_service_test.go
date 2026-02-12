@@ -18,7 +18,9 @@ import (
 func TestCreateCandidate(t *testing.T) {
 	jobIDStr := "02020202-0202-0202-0202-020202020202"
 	var jobIDUUID pgtype.UUID
-	jobIDUUID.Scan(jobIDStr)
+	if err := jobIDUUID.Scan(jobIDStr); err != nil {
+		t.Fatalf("failed to scan job id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		CreateCandidateFunc: func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error) {
@@ -74,7 +76,9 @@ func TestUpdateCandidate(t *testing.T) {
 	cID := "00000000-0000-0000-0000-000000000001"
 	jobIDStr := "02020202-0202-0202-0202-020202020202"
 	var jobIDUUID pgtype.UUID
-	jobIDUUID.Scan(jobIDStr)
+	if err := jobIDUUID.Scan(jobIDStr); err != nil {
+		t.Fatalf("failed to scan job id: %v", err)
+	}
 
 	currentName := "Old Name"
 
@@ -116,16 +120,24 @@ func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
 	userIDStr := "00000000-0000-0000-0000-000000000002"
 
 	var candidateID pgtype.UUID
-	candidateID.Scan(candidateIDStr)
+	if err := candidateID.Scan(candidateIDStr); err != nil {
+		t.Fatalf("failed to scan candidate id: %v", err)
+	}
 
 	var userID pgtype.UUID
-	userID.Scan(userIDStr)
+	if err := userID.Scan(userIDStr); err != nil {
+		t.Fatalf("failed to scan user id: %v", err)
+	}
 
 	var actorEmployeeID pgtype.UUID
-	actorEmployeeID.Scan("00000000-0000-0000-0000-000000000003")
+	if err := actorEmployeeID.Scan("00000000-0000-0000-0000-000000000003"); err != nil {
+		t.Fatalf("failed to scan actor employee id: %v", err)
+	}
 
 	var assignedReviewerID pgtype.UUID
-	assignedReviewerID.Scan("00000000-0000-0000-0000-000000000004")
+	if err := assignedReviewerID.Scan("00000000-0000-0000-0000-000000000004"); err != nil {
+		t.Fatalf("failed to scan assigned reviewer id: %v", err)
+	}
 
 	submitCalled := false
 	mockRepo := &mocks.MockQuerier{
@@ -177,7 +189,9 @@ func TestSubmitReview_ReviewerProfileNotFound(t *testing.T) {
 
 func TestSubmitReview_CandidateNotFound(t *testing.T) {
 	var employeeID pgtype.UUID
-	employeeID.Scan("00000000-0000-0000-0000-000000000003")
+	if err := employeeID.Scan("00000000-0000-0000-0000-000000000003"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
 
 	mockRepo := &mocks.MockQuerier{
 		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {

@@ -30,12 +30,22 @@ func main() {
 	err = db.Pool.QueryRow(ctx, "SELECT id, username FROM users WHERE username='admin'").Scan(&userID, &username)
 	if err != nil {
 		fmt.Println("User 'admin' NOT FOUND. Listing all users:")
-		rows, _ := db.Pool.Query(ctx, "SELECT id, username FROM users LIMIT 10")
+		rows, rowsErr := db.Pool.Query(ctx, "SELECT id, username FROM users LIMIT 10")
+		if rowsErr != nil {
+			log.Fatalf("Failed to query users: %v", rowsErr)
+		}
+		defer rows.Close()
+
 		for rows.Next() {
 			var uid pgtype.UUID
 			var uname string
-			rows.Scan(&uid, &uname)
+			if scanErr := rows.Scan(&uid, &uname); scanErr != nil {
+				log.Fatalf("Failed to scan user row: %v", scanErr)
+			}
 			fmt.Printf(" - %s (%v)\n", uname, uid)
+		}
+		if rowsErr := rows.Err(); rowsErr != nil {
+			log.Fatalf("Failed while iterating users: %v", rowsErr)
 		}
 		return
 	}
