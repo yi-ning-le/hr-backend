@@ -40,14 +40,15 @@ func TestCreateInterview(t *testing.T) {
 	mockRepo := &mocks.MockQuerier{
 		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
 			return repository.Interview{
-				ID:            pgtype.UUID{Valid: true}, // returned ID doesn't matter much for this test
-				CandidateID:   arg.CandidateID,
-				InterviewerID: arg.InterviewerID,
-				JobID:         arg.JobID,
-				ScheduledTime: arg.ScheduledTime,
-				Status:        arg.Status,
-				CreatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
-				UpdatedAt:     pgtype.Timestamptz{Time: time.Now(), Valid: true},
+				ID:               pgtype.UUID{Valid: true},
+				CandidateID:      arg.CandidateID,
+				InterviewerID:    arg.InterviewerID,
+				JobID:            arg.JobID,
+				ScheduledTime:    arg.ScheduledTime,
+				ScheduledEndTime: arg.ScheduledEndTime,
+				Status:           arg.Status,
+				CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
+				UpdatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			}, nil
 		},
 	}
@@ -57,10 +58,11 @@ func TestCreateInterview(t *testing.T) {
 	r.POST("/recruitment/interviews", h.CreateInterview)
 
 	input := model.CreateInterviewInput{
-		CandidateID:   candidateIDStr,
-		InterviewerID: interviewerIDStr,
-		JobID:         jobIDStr,
-		ScheduledTime: time.Now().Add(24 * time.Hour),
+		CandidateID:      candidateIDStr,
+		InterviewerID:    interviewerIDStr,
+		JobID:            jobIDStr,
+		ScheduledTime:    time.Now().Add(24 * time.Hour),
+		ScheduledEndTime: time.Now().Add(25 * time.Hour),
 	}
 
 	body, _ := json.Marshal(input)
@@ -81,6 +83,91 @@ func TestCreateInterview(t *testing.T) {
 
 	if result.CandidateID != candidateIDStr {
 		t.Errorf("expected candidateId %s, got %s", candidateIDStr, result.CandidateID)
+	}
+}
+
+func TestCreateInterview_RejectsPastStartTime(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "11111111-1111-1111-1111-111111111111"
+	interviewerIDStr := "22222222-2222-2222-2222-222222222222"
+	jobIDStr := "33333333-3333-3333-3333-333333333333"
+	createCalled := false
+
+	mockRepo := &mocks.MockQuerier{
+		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
+			createCalled = true
+			return repository.Interview{}, nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.POST("/recruitment/interviews", h.CreateInterview)
+
+	input := model.CreateInterviewInput{
+		CandidateID:      candidateIDStr,
+		InterviewerID:    interviewerIDStr,
+		JobID:            jobIDStr,
+		ScheduledTime:    time.Now().Add(-1 * time.Hour),
+		ScheduledEndTime: time.Now().Add(1 * time.Hour),
+	}
+
+	body, _ := json.Marshal(input)
+	req, _ := http.NewRequest("POST", "/recruitment/interviews", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	if createCalled {
+		t.Fatalf("create interview should not be called when start time is in the past")
+	}
+}
+
+func TestCreateInterview_RejectsInvalidTimeRange(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "11111111-1111-1111-1111-111111111111"
+	interviewerIDStr := "22222222-2222-2222-2222-222222222222"
+	jobIDStr := "33333333-3333-3333-3333-333333333333"
+	createCalled := false
+
+	mockRepo := &mocks.MockQuerier{
+		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
+			createCalled = true
+			return repository.Interview{}, nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.POST("/recruitment/interviews", h.CreateInterview)
+
+	startTime := time.Now().Add(2 * time.Hour)
+	input := model.CreateInterviewInput{
+		CandidateID:      candidateIDStr,
+		InterviewerID:    interviewerIDStr,
+		JobID:            jobIDStr,
+		ScheduledTime:    startTime,
+		ScheduledEndTime: startTime,
+	}
+
+	body, _ := json.Marshal(input)
+	req, _ := http.NewRequest("POST", "/recruitment/interviews", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d", w.Code)
+	}
+	if createCalled {
+		t.Fatalf("create interview should not be called when end time is not after start time")
 	}
 }
 

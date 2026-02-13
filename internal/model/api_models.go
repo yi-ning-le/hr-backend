@@ -134,20 +134,22 @@ type EmployeeListResult struct {
 // --- Interview Models ---
 
 type Interview struct {
-	ID            string    `json:"id"`
-	CandidateID   string    `json:"candidateId"`
-	InterviewerID string    `json:"interviewerId"`
-	JobID         string    `json:"jobId"`
-	ScheduledTime time.Time `json:"scheduledTime"`
-	Status        string    `json:"status"`
-	CreatedAt     time.Time `json:"createdAt"`
+	ID               string    `json:"id"`
+	CandidateID      string    `json:"candidateId"`
+	InterviewerID    string    `json:"interviewerId"`
+	JobID            string    `json:"jobId"`
+	ScheduledTime    time.Time `json:"scheduledTime"`
+	ScheduledEndTime time.Time `json:"scheduledEndTime"`
+	Status           string    `json:"status"`
+	CreatedAt        time.Time `json:"createdAt"`
 }
 
 type CreateInterviewInput struct {
-	CandidateID   string    `json:"candidateId" binding:"required"`
-	InterviewerID string    `json:"interviewerId" binding:"required"`
-	JobID         string    `json:"jobId" binding:"required"` // Can be derived from candidate, but explicit is okay
-	ScheduledTime time.Time `json:"scheduledTime" binding:"required"`
+	CandidateID      string    `json:"candidateId" binding:"required"`
+	InterviewerID    string    `json:"interviewerId" binding:"required"`
+	JobID            string    `json:"jobId" binding:"required"`
+	ScheduledTime    time.Time `json:"scheduledTime" binding:"required"`
+	ScheduledEndTime time.Time `json:"scheduledEndTime" binding:"required"`
 }
 
 // --- Candidate Comment Models ---

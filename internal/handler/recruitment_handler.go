@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"time"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -271,6 +272,11 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		return
 	}
 
+	if validationErr := validateInterviewSchedule(input.ScheduledTime, input.ScheduledEndTime, time.Now()); validationErr != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": validationErr})
+		return
+	}
+
 	candidateID, err := parseUUID(input.CandidateID)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid candidate ID"})
@@ -290,30 +296,30 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
-	// Create interview
 	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{
-		CandidateID:   candidateID,
-		InterviewerID: interviewerID,
-		JobID:         jobID,
-		ScheduledTime: pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
-		Status:        "PENDING",
+		CandidateID:      candidateID,
+		InterviewerID:    interviewerID,
+		JobID:            jobID,
+		ScheduledTime:    pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
+		ScheduledEndTime: pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
+		Status:           "PENDING",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
 		return
 	}
 
-	// Grant INTERVIEWER role to the assigned interviewer
 	_ = h.queries.AssignInterviewerRole(ctx, interviewerID)
 
 	c.JSON(http.StatusCreated, model.Interview{
-		ID:            uuidToString(interview.ID),
-		CandidateID:   uuidToString(interview.CandidateID),
-		InterviewerID: uuidToString(interview.InterviewerID),
-		JobID:         uuidToString(interview.JobID),
-		ScheduledTime: interview.ScheduledTime.Time,
-		Status:        interview.Status,
-		CreatedAt:     interview.CreatedAt.Time,
+		ID:               uuidToString(interview.ID),
+		CandidateID:      uuidToString(interview.CandidateID),
+		InterviewerID:    uuidToString(interview.InterviewerID),
+		JobID:            uuidToString(interview.JobID),
+		ScheduledTime:    interview.ScheduledTime.Time,
+		ScheduledEndTime: interview.ScheduledEndTime.Time,
+		Status:           interview.Status,
+		CreatedAt:        interview.CreatedAt.Time,
 	})
 }
 
@@ -350,13 +356,14 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 	result := make([]model.Interview, len(interviews))
 	for i, interview := range interviews {
 		result[i] = model.Interview{
-			ID:            uuidToString(interview.ID),
-			CandidateID:   uuidToString(interview.CandidateID),
-			InterviewerID: uuidToString(interview.InterviewerID),
-			JobID:         uuidToString(interview.JobID),
-			ScheduledTime: interview.ScheduledTime.Time,
-			Status:        interview.Status,
-			CreatedAt:     interview.CreatedAt.Time,
+			ID:               uuidToString(interview.ID),
+			CandidateID:      uuidToString(interview.CandidateID),
+			InterviewerID:    uuidToString(interview.InterviewerID),
+			JobID:            uuidToString(interview.JobID),
+			ScheduledTime:    interview.ScheduledTime.Time,
+			ScheduledEndTime: interview.ScheduledEndTime.Time,
+			Status:           interview.Status,
+			CreatedAt:        interview.CreatedAt.Time,
 		}
 	}
 
@@ -395,13 +402,14 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, model.Interview{
-		ID:            uuidToString(interview.ID),
-		CandidateID:   uuidToString(interview.CandidateID),
-		InterviewerID: uuidToString(interview.InterviewerID),
-		JobID:         uuidToString(interview.JobID),
-		ScheduledTime: interview.ScheduledTime.Time,
-		Status:        interview.Status,
-		CreatedAt:     interview.CreatedAt.Time,
+		ID:               uuidToString(interview.ID),
+		CandidateID:      uuidToString(interview.CandidateID),
+		InterviewerID:    uuidToString(interview.InterviewerID),
+		JobID:            uuidToString(interview.JobID),
+		ScheduledTime:    interview.ScheduledTime.Time,
+		ScheduledEndTime: interview.ScheduledEndTime.Time,
+		Status:           interview.Status,
+		CreatedAt:        interview.CreatedAt.Time,
 	})
 }
 
@@ -452,4 +460,16 @@ func uuidToString(u pgtype.UUID) string {
 	// Use the utility function for consistent UUID string format
 	src := u.Bytes
 	return fmt.Sprintf("%x-%x-%x-%x-%x", src[0:4], src[4:6], src[6:8], src[8:10], src[10:16])
+}
+
+func validateInterviewSchedule(scheduledTime, scheduledEndTime, now time.Time) string {
+	if !scheduledTime.After(now) {
+		return "Start time must be in the future"
+	}
+
+	if !scheduledEndTime.After(scheduledTime) {
+		return "End time must be after start time"
+	}
+
+	return ""
 }

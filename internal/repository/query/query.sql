@@ -303,9 +303,9 @@ SELECT * FROM employees WHERE user_id = $1 LIMIT 1;
 
 -- name: CreateInterview :one
 INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, status
+  candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status
 ) VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 )
 RETURNING *;
 

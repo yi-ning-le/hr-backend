@@ -424,19 +424,20 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 const createInterview = `-- name: CreateInterview :one
 
 INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, status
+  candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status
 ) VALUES (
-  $1, $2, $3, $4, $5
+  $1, $2, $3, $4, $5, $6
 )
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time
 `
 
 type CreateInterviewParams struct {
-	CandidateID   pgtype.UUID        `json:"candidate_id"`
-	InterviewerID pgtype.UUID        `json:"interviewer_id"`
-	JobID         pgtype.UUID        `json:"job_id"`
-	ScheduledTime pgtype.Timestamptz `json:"scheduled_time"`
-	Status        string             `json:"status"`
+	CandidateID      pgtype.UUID        `json:"candidate_id"`
+	InterviewerID    pgtype.UUID        `json:"interviewer_id"`
+	JobID            pgtype.UUID        `json:"job_id"`
+	ScheduledTime    pgtype.Timestamptz `json:"scheduled_time"`
+	ScheduledEndTime pgtype.Timestamptz `json:"scheduled_end_time"`
+	Status           string             `json:"status"`
 }
 
 // Interview queries
@@ -446,6 +447,7 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		arg.InterviewerID,
 		arg.JobID,
 		arg.ScheduledTime,
+		arg.ScheduledEndTime,
 		arg.Status,
 	)
 	var i Interview
@@ -458,6 +460,7 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScheduledEndTime,
 	)
 	return i, err
 }
@@ -915,7 +918,7 @@ func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (
 }
 
 const getInterview = `-- name: GetInterview :one
-SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at FROM interviews WHERE id = $1 LIMIT 1
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time FROM interviews WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error) {
@@ -930,6 +933,7 @@ func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, 
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScheduledEndTime,
 	)
 	return i, err
 }
@@ -1414,7 +1418,7 @@ func (q *Queries) ListHRs(ctx context.Context) ([]ListHRsRow, error) {
 }
 
 const listInterviewsByInterviewer = `-- name: ListInterviewsByInterviewer :many
-SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at FROM interviews
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time FROM interviews
 WHERE interviewer_id = $1
 ORDER BY scheduled_time DESC
 `
@@ -1437,6 +1441,7 @@ func (q *Queries) ListInterviewsByInterviewer(ctx context.Context, interviewerID
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.ScheduledEndTime,
 		); err != nil {
 			return nil, err
 		}
@@ -1699,7 +1704,7 @@ UPDATE interviews
 SET interviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time
 `
 
 type TransferInterviewParams struct {
@@ -1719,6 +1724,7 @@ func (q *Queries) TransferInterview(ctx context.Context, arg TransferInterviewPa
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScheduledEndTime,
 	)
 	return i, err
 }
@@ -2004,7 +2010,7 @@ UPDATE interviews
 SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time
 `
 
 type UpdateInterviewStatusParams struct {
@@ -2024,6 +2030,7 @@ func (q *Queries) UpdateInterviewStatus(ctx context.Context, arg UpdateInterview
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.ScheduledEndTime,
 	)
 	return i, err
 }
