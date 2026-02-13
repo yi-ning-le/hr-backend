@@ -85,7 +85,6 @@ type Interview struct {
 	JobID         pgtype.UUID        `json:"job_id"`
 	ScheduledTime pgtype.Timestamptz `json:"scheduled_time"`
 	Status        string             `json:"status"`
-	Notes         pgtype.Text        `json:"notes"`
 	CreatedAt     pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt     pgtype.Timestamptz `json:"updated_at"`
 }

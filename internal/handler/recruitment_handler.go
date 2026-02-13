@@ -302,7 +302,6 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		JobID:         jobID,
 		ScheduledTime: pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
 		Status:        "PENDING",
-		Notes:         pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
@@ -319,7 +318,6 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		JobID:         uuidToString(interview.JobID),
 		ScheduledTime: interview.ScheduledTime.Time,
 		Status:        interview.Status,
-		Notes:         interview.Notes.String,
 		CreatedAt:     interview.CreatedAt.Time,
 	})
 }
@@ -363,7 +361,6 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 			JobID:         uuidToString(interview.JobID),
 			ScheduledTime: interview.ScheduledTime.Time,
 			Status:        interview.Status,
-			Notes:         interview.Notes.String,
 			CreatedAt:     interview.CreatedAt.Time,
 		}
 	}
@@ -409,69 +406,6 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 		JobID:         uuidToString(interview.JobID),
 		ScheduledTime: interview.ScheduledTime.Time,
 		Status:        interview.Status,
-		Notes:         interview.Notes.String,
-		CreatedAt:     interview.CreatedAt.Time,
-	})
-}
-
-// UpdateInterviewNotes updates the notes for an interview
-func (h *RecruitmentHandler) UpdateInterviewNotes(c *gin.Context) {
-	interviewIDStr := c.Param("id")
-	interviewID, err := parseUUID(interviewIDStr)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
-		return
-	}
-
-	userID, ok := currentUserIDFromContext(c)
-	if !ok {
-		return
-	}
-
-	var input model.UpdateInterviewNotesInput
-	if err := c.ShouldBindJSON(&input); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	ctx := c.Request.Context()
-	existingInterview, err := h.queries.GetInterview(ctx, interviewID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
-		return
-	}
-
-	canAccess, err := h.canAccessInterviewByInterviewer(
-		ctx,
-		userID,
-		existingInterview.InterviewerID,
-	)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interview permission"})
-		return
-	}
-	if !canAccess {
-		c.JSON(http.StatusForbidden, gin.H{"error": "Interview access denied"})
-		return
-	}
-
-	interview, err := h.queries.UpdateInterviewNote(ctx, repository.UpdateInterviewNoteParams{
-		ID:    interviewID,
-		Notes: pgtype.Text{String: input.Notes, Valid: input.Notes != ""},
-	})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview notes"})
-		return
-	}
-
-	c.JSON(http.StatusOK, model.Interview{
-		ID:            uuidToString(interview.ID),
-		CandidateID:   uuidToString(interview.CandidateID),
-		InterviewerID: uuidToString(interview.InterviewerID),
-		JobID:         uuidToString(interview.JobID),
-		ScheduledTime: interview.ScheduledTime.Time,
-		Status:        interview.Status,
-		Notes:         interview.Notes.String,
 		CreatedAt:     interview.CreatedAt.Time,
 	})
 }

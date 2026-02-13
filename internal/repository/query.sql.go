@@ -419,11 +419,11 @@ func (q *Queries) CreateEmployee(ctx context.Context, arg CreateEmployeeParams) 
 const createInterview = `-- name: CreateInterview :one
 
 INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, status, notes
+  candidate_id, interviewer_id, job_id, scheduled_time, status
 ) VALUES (
-  $1, $2, $3, $4, $5, $6
+  $1, $2, $3, $4, $5
 )
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
 `
 
 type CreateInterviewParams struct {
@@ -432,7 +432,6 @@ type CreateInterviewParams struct {
 	JobID         pgtype.UUID        `json:"job_id"`
 	ScheduledTime pgtype.Timestamptz `json:"scheduled_time"`
 	Status        string             `json:"status"`
-	Notes         pgtype.Text        `json:"notes"`
 }
 
 // Interview queries
@@ -443,7 +442,6 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		arg.JobID,
 		arg.ScheduledTime,
 		arg.Status,
-		arg.Notes,
 	)
 	var i Interview
 	err := row.Scan(
@@ -453,7 +451,6 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		&i.JobID,
 		&i.ScheduledTime,
 		&i.Status,
-		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -913,7 +910,7 @@ func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (
 }
 
 const getInterview = `-- name: GetInterview :one
-SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at FROM interviews WHERE id = $1 LIMIT 1
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at FROM interviews WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error) {
@@ -926,7 +923,6 @@ func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, 
 		&i.JobID,
 		&i.ScheduledTime,
 		&i.Status,
-		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1408,7 +1404,7 @@ func (q *Queries) ListHRs(ctx context.Context) ([]ListHRsRow, error) {
 }
 
 const listInterviewsByInterviewer = `-- name: ListInterviewsByInterviewer :many
-SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at FROM interviews
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at FROM interviews
 WHERE interviewer_id = $1
 ORDER BY scheduled_time DESC
 `
@@ -1429,7 +1425,6 @@ func (q *Queries) ListInterviewsByInterviewer(ctx context.Context, interviewerID
 			&i.JobID,
 			&i.ScheduledTime,
 			&i.Status,
-			&i.Notes,
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
@@ -1693,7 +1688,7 @@ UPDATE interviews
 SET interviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
 `
 
 type TransferInterviewParams struct {
@@ -1711,7 +1706,6 @@ func (q *Queries) TransferInterview(ctx context.Context, arg TransferInterviewPa
 		&i.JobID,
 		&i.ScheduledTime,
 		&i.Status,
-		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -1994,42 +1988,12 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 	return i, err
 }
 
-const updateInterviewNote = `-- name: UpdateInterviewNote :one
-UPDATE interviews
-SET notes = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
-`
-
-type UpdateInterviewNoteParams struct {
-	ID    pgtype.UUID `json:"id"`
-	Notes pgtype.Text `json:"notes"`
-}
-
-func (q *Queries) UpdateInterviewNote(ctx context.Context, arg UpdateInterviewNoteParams) (Interview, error) {
-	row := q.db.QueryRow(ctx, updateInterviewNote, arg.ID, arg.Notes)
-	var i Interview
-	err := row.Scan(
-		&i.ID,
-		&i.CandidateID,
-		&i.InterviewerID,
-		&i.JobID,
-		&i.ScheduledTime,
-		&i.Status,
-		&i.Notes,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-	)
-	return i, err
-}
-
 const updateInterviewStatus = `-- name: UpdateInterviewStatus :one
 UPDATE interviews
 SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, notes, created_at, updated_at
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at
 `
 
 type UpdateInterviewStatusParams struct {
@@ -2047,7 +2011,6 @@ func (q *Queries) UpdateInterviewStatus(ctx context.Context, arg UpdateInterview
 		&i.JobID,
 		&i.ScheduledTime,
 		&i.Status,
-		&i.Notes,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)

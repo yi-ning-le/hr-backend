@@ -140,7 +140,6 @@ type Interview struct {
 	JobID         string    `json:"jobId"`
 	ScheduledTime time.Time `json:"scheduledTime"`
 	Status        string    `json:"status"`
-	Notes         string    `json:"notes,omitempty"`
 	CreatedAt     time.Time `json:"createdAt"`
 }
 
@@ -149,11 +148,6 @@ type CreateInterviewInput struct {
 	InterviewerID string    `json:"interviewerId" binding:"required"`
 	JobID         string    `json:"jobId" binding:"required"` // Can be derived from candidate, but explicit is okay
 	ScheduledTime time.Time `json:"scheduledTime" binding:"required"`
-	Notes         string    `json:"notes"`
-}
-
-type UpdateInterviewNotesInput struct {
-	Notes string `json:"notes" binding:"required"`
 }
 
 // --- Candidate Comment Models ---

@@ -68,7 +68,7 @@ type MockQuerier struct {
 	HasInterviewAssignmentsFunc     func(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	TransferInterviewFunc           func(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error)
 	UpdateInterviewStatusFunc       func(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error)
-	UpdateInterviewNoteFunc         func(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error)
+	UpdateInterviewNoteFunc         func(ctx context.Context, arg interface{}) (repository.Interview, error)
 
 	// HR role check
 	CheckIsHRFunc    func(ctx context.Context, id pgtype.UUID) (bool, error)
@@ -361,12 +361,6 @@ func (m *MockQuerier) TransferInterview(ctx context.Context, arg repository.Tran
 func (m *MockQuerier) UpdateInterviewStatus(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error) {
 	if m.UpdateInterviewStatusFunc != nil {
 		return m.UpdateInterviewStatusFunc(ctx, arg)
-	}
-	return repository.Interview{}, nil
-}
-func (m *MockQuerier) UpdateInterviewNote(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error) {
-	if m.UpdateInterviewNoteFunc != nil {
-		return m.UpdateInterviewNoteFunc(ctx, arg)
 	}
 	return repository.Interview{}, nil
 }

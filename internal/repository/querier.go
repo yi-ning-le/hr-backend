@@ -88,7 +88,6 @@ type Querier interface {
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)
 	UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error
 	UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error)
-	UpdateInterviewNote(ctx context.Context, arg UpdateInterviewNoteParams) (Interview, error)
 	UpdateInterviewStatus(ctx context.Context, arg UpdateInterviewStatusParams) (Interview, error)
 	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
 	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)

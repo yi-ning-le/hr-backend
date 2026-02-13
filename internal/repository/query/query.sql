@@ -299,9 +299,9 @@ SELECT * FROM employees WHERE user_id = $1 LIMIT 1;
 
 -- name: CreateInterview :one
 INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, status, notes
+  candidate_id, interviewer_id, job_id, scheduled_time, status
 ) VALUES (
-  $1, $2, $3, $4, $5, $6
+  $1, $2, $3, $4, $5
 )
 RETURNING *;
 
@@ -326,13 +326,6 @@ RETURNING *;
 -- name: UpdateInterviewStatus :one
 UPDATE interviews
 SET status = $2,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1
-RETURNING *;
-
--- name: UpdateInterviewNote :one
-UPDATE interviews
-SET notes = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
 RETURNING *;
