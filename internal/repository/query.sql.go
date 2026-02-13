@@ -28,7 +28,7 @@ func (q *Queries) AssignHRRole(ctx context.Context, id pgtype.UUID) error {
 const assignInterviewerRole = `-- name: AssignInterviewerRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'INTERVIEWER')
-ON CONFLICT (employee_id) DO NOTHING
+ON CONFLICT (employee_id, role_type) DO NOTHING
 `
 
 func (q *Queries) AssignInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error {
@@ -39,7 +39,7 @@ func (q *Queries) AssignInterviewerRole(ctx context.Context, employeeID pgtype.U
 const assignRecruiterRole = `-- name: AssignRecruiterRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'RECRUITER')
-ON CONFLICT (employee_id) DO NOTHING
+ON CONFLICT (employee_id, role_type) DO NOTHING
 `
 
 func (q *Queries) AssignRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {
@@ -145,7 +145,10 @@ func (q *Queries) CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error) {
 }
 
 const checkRecruiterRole = `-- name: CheckRecruiterRole :one
-SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1
+SELECT employee_id
+FROM recruitment_roles
+WHERE employee_id = $1 AND role_type = 'RECRUITER'
+LIMIT 1
 `
 
 func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
@@ -157,7 +160,9 @@ func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID
 
 const countCandidateReviewerAssignments = `-- name: CountCandidateReviewerAssignments :one
 
-SELECT COUNT(*) FROM candidate_reviewers WHERE reviewer_id = $1
+SELECT COUNT(*)
+FROM candidate_reviewers
+WHERE reviewer_id = $1 AND removed_at IS NULL
 `
 
 // Candidate Reviewer queries
@@ -1097,7 +1102,12 @@ func (q *Queries) InsertCandidateReviewer(ctx context.Context, arg InsertCandida
 }
 
 const isCandidateReviewer = `-- name: IsCandidateReviewer :one
-SELECT id FROM candidate_reviewers WHERE candidate_id = $1 AND reviewer_id = $2 LIMIT 1
+SELECT id
+FROM candidate_reviewers
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL
+LIMIT 1
 `
 
 type IsCandidateReviewerParams struct {
@@ -1124,7 +1134,7 @@ SELECT
 FROM candidate_comments cc
 JOIN employees e ON cc.author_id = e.id
 JOIN users u ON e.user_id = u.id
-LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id
+LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id AND rr.role_type = 'RECRUITER'
 WHERE cc.candidate_id = $1
 ORDER BY cc.created_at DESC
 `
@@ -1480,6 +1490,7 @@ FROM recruitment_roles rr
 JOIN employees e ON rr.employee_id = e.id
 JOIN users u ON e.user_id = u.id
 WHERE u.is_admin = false
+  AND rr.role_type = 'RECRUITER'
 ORDER BY e.first_name
 `
 
@@ -1612,7 +1623,7 @@ func (q *Queries) RevokeInterviewerRole(ctx context.Context, employeeID pgtype.U
 }
 
 const revokeRecruiterRole = `-- name: RevokeRecruiterRole :exec
-DELETE FROM recruitment_roles WHERE employee_id = $1
+DELETE FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'RECRUITER'
 `
 
 func (q *Queries) RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {

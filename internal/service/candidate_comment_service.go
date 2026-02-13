@@ -10,6 +10,7 @@ import (
 	"hr-backend/internal/utils"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 type CandidateCommentService struct {
@@ -115,14 +116,23 @@ func (s *CandidateCommentService) DeleteComment(ctx context.Context, commentID s
 		return err
 	}
 
-	empUUID, err := utils.StringToUUID(employeeID)
+	userUUID, err := utils.StringToUUID(userID)
 	if err != nil {
 		return err
 	}
 
-	userUUID, err := utils.StringToUUID(userID)
-	if err != nil {
-		return err
+	empUUID := pgtype.UUID{Valid: false}
+	if employeeID != "" {
+		parsedEmployeeID, parseErr := utils.StringToUUID(employeeID)
+		if parseErr != nil {
+			return parseErr
+		}
+		empUUID = parsedEmployeeID
+	}
+	if !empUUID.Valid {
+		if employee, employeeErr := s.repo.GetEmployeeByUserID(ctx, userUUID); employeeErr == nil {
+			empUUID = employee.ID
+		}
 	}
 
 	comment, err := s.repo.GetCandidateComment(ctx, commUUID)
@@ -133,22 +143,20 @@ func (s *CandidateCommentService) DeleteComment(ctx context.Context, commentID s
 		return err
 	}
 
-	// Permission check: Author OR HR OR Admin
-	isAuthor := utils.UUIDToString(comment.AuthorID) == utils.UUIDToString(empUUID)
-	if isAuthor {
-		return s.repo.DeleteCandidateComment(ctx, commUUID)
-	}
-
-	// Check Admin
-	isAdmin, err := s.repo.CheckIsAdmin(ctx, userUUID)
-	if err == nil && isAdmin {
-		return s.repo.DeleteCandidateComment(ctx, commUUID)
+	// Permission check: Author OR HR
+	if empUUID.Valid {
+		isAuthor := utils.UUIDToString(comment.AuthorID) == utils.UUIDToString(empUUID)
+		if isAuthor {
+			return s.repo.DeleteCandidateComment(ctx, commUUID)
+		}
 	}
 
 	// Check HR
-	isHR, err := s.repo.CheckIsHR(ctx, empUUID)
-	if err == nil && isHR {
-		return s.repo.DeleteCandidateComment(ctx, commUUID)
+	if empUUID.Valid {
+		isHR, err := s.repo.CheckIsHR(ctx, empUUID)
+		if err == nil && isHR {
+			return s.repo.DeleteCandidateComment(ctx, commUUID)
+		}
 	}
 
 	return ErrDeleteCommentNoPerm

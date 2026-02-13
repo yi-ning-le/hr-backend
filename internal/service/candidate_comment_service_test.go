@@ -118,14 +118,14 @@ func TestDeleteComment(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
-	t.Run("Admin can delete", func(t *testing.T) {
+	t.Run("HR can delete", func(t *testing.T) {
 		mockRepo.GetCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
 			return repository.CandidateComment{
 				ID:       id,
 				AuthorID: pgtype.UUID{Bytes: [16]byte{255}, Valid: true}, // Different author
 			}, nil
 		}
-		mockRepo.CheckIsAdminFunc = func(ctx context.Context, id pgtype.UUID) (bool, error) {
+		mockRepo.CheckIsHRFunc = func(ctx context.Context, id pgtype.UUID) (bool, error) {
 			return true, nil
 		}
 		mockRepo.DeleteCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) error {
@@ -136,6 +136,26 @@ func TestDeleteComment(t *testing.T) {
 		assert.NoError(t, err)
 	})
 
+	t.Run("Author can delete without employee ID in context", func(t *testing.T) {
+		userUUID, _ := utils.StringToUUID(userID)
+		mockRepo.GetCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
+			return repository.CandidateComment{
+				ID:       id,
+				AuthorID: empUUID,
+			}, nil
+		}
+		mockRepo.GetEmployeeByUserIDFunc = func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			assert.Equal(t, userUUID, id)
+			return repository.Employee{ID: empUUID, UserID: userUUID}, nil
+		}
+		mockRepo.DeleteCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) error {
+			return nil
+		}
+
+		err := s.DeleteComment(context.Background(), commentID, userID, "")
+		assert.NoError(t, err)
+	})
+
 	t.Run("Others cannot delete", func(t *testing.T) {
 		mockRepo.GetCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
 			return repository.CandidateComment{
@@ -143,14 +163,40 @@ func TestDeleteComment(t *testing.T) {
 				AuthorID: pgtype.UUID{Bytes: [16]byte{255}, Valid: true}, // Different author
 			}, nil
 		}
-		mockRepo.CheckIsAdminFunc = func(ctx context.Context, id pgtype.UUID) (bool, error) {
-			return false, nil
-		}
 		mockRepo.CheckIsHRFunc = func(ctx context.Context, id pgtype.UUID) (bool, error) {
 			return false, nil
 		}
 
 		err := s.DeleteComment(context.Background(), commentID, userID, employeeID)
+		assert.Error(t, err)
+		assert.Equal(t, ErrDeleteCommentNoPerm, err)
+	})
+
+	t.Run("Admin without employee profile cannot delete", func(t *testing.T) {
+		mockRepo.GetCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
+			return repository.CandidateComment{
+				ID:       id,
+				AuthorID: pgtype.UUID{Bytes: [16]byte{255}, Valid: true},
+			}, nil
+		}
+
+		err := s.DeleteComment(context.Background(), commentID, userID, "")
+		assert.Error(t, err)
+		assert.Equal(t, ErrDeleteCommentNoPerm, err)
+	})
+
+	t.Run("User without employee profile cannot delete", func(t *testing.T) {
+		mockRepo.GetCandidateCommentFunc = func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error) {
+			return repository.CandidateComment{
+				ID:       id,
+				AuthorID: pgtype.UUID{Bytes: [16]byte{255}, Valid: true},
+			}, nil
+		}
+		mockRepo.CheckIsHRFunc = func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return false, nil
+		}
+
+		err := s.DeleteComment(context.Background(), commentID, userID, "")
 		assert.Error(t, err)
 		assert.Equal(t, ErrDeleteCommentNoPerm, err)
 	})

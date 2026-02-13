@@ -163,6 +163,10 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 		return nil, err
 	}
 
+	if err := s.repo.UpdateCandidateReviewerRemovedAt(ctx, uuid); err != nil {
+		return nil, err
+	}
+
 	_, err = s.repo.InsertCandidateReviewer(ctx, repository.InsertCandidateReviewerParams{
 		CandidateID: uuid,
 		ReviewerID:  reviewerUUID,

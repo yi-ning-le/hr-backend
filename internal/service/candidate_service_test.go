@@ -215,3 +215,53 @@ func TestSubmitReview_CandidateNotFound(t *testing.T) {
 		t.Fatalf("expected ErrCandidateNotFound, got %v", err)
 	}
 }
+
+func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	reviewerIDStr := "00000000-0000-0000-0000-000000000002"
+
+	var candidateID, reviewerID pgtype.UUID
+	if err := candidateID.Scan(candidateIDStr); err != nil {
+		t.Fatalf("failed to scan candidate id: %v", err)
+	}
+	if err := reviewerID.Scan(reviewerIDStr); err != nil {
+		t.Fatalf("failed to scan reviewer id: %v", err)
+	}
+
+	callOrder := make([]string, 0, 2)
+	mockRepo := &mocks.MockQuerier{
+		AssignReviewerFunc: func(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error) {
+			return repository.AssignReviewerRow{
+				ID:         arg.ID,
+				ReviewerID: arg.ReviewerID,
+			}, nil
+		},
+		UpdateCandidateReviewerRemovedAtFunc: func(ctx context.Context, id pgtype.UUID) error {
+			callOrder = append(callOrder, "remove_old")
+			if id != candidateID {
+				t.Fatalf("expected candidate id %v, got %v", candidateID, id)
+			}
+			return nil
+		},
+		InsertCandidateReviewerFunc: func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error) {
+			callOrder = append(callOrder, "insert_new")
+			if arg.CandidateID != candidateID {
+				t.Fatalf("expected candidate id %v, got %v", candidateID, arg.CandidateID)
+			}
+			if arg.ReviewerID != reviewerID {
+				t.Fatalf("expected reviewer id %v, got %v", reviewerID, arg.ReviewerID)
+			}
+			return repository.CandidateReviewer{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.AssignReviewer(context.Background(), candidateIDStr, reviewerIDStr)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	if len(callOrder) != 2 || callOrder[0] != "remove_old" || callOrder[1] != "insert_new" {
+		t.Fatalf("unexpected call order: %v", callOrder)
+	}
+}

@@ -69,13 +69,10 @@ func (h *CandidateCommentHandler) DeleteComment(c *gin.Context) {
 		return
 	}
 
-	employeeID, exists := c.Get("employeeID")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized: no linked employee profile"})
-		return
-	}
+	employeeID, _ := c.Get("employeeID")
+	employeeIDStr, _ := employeeID.(string)
 
-	err := h.service.DeleteComment(c.Request.Context(), commentID, userID.(string), employeeID.(string))
+	err := h.service.DeleteComment(c.Request.Context(), commentID, userID.(string), employeeIDStr)
 	if err != nil {
 		if errors.Is(err, service.ErrCommentNotFound) {
 			c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})

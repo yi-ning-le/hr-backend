@@ -70,14 +70,9 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
 
-	// Check and maintain INTERVIEWER role
-	activeInterviewCount, _ := h.queries.GetActiveInterviewCount(ctx, employee.ID)
-	if activeInterviewCount == 0 {
-		_ = h.queries.RevokeInterviewerRole(ctx, employee.ID)
-	}
-
-	interviewerID, _ := h.queries.CheckInterviewerRole(ctx, employee.ID)
-	isInterviewer := interviewerID.Valid
+	activeInterviewCount, activeInterviewErr := h.queries.GetActiveInterviewCount(ctx, employee.ID)
+	interviewerID, interviewerRoleErr := h.queries.CheckInterviewerRole(ctx, employee.ID)
+	isInterviewer := (interviewerRoleErr == nil && interviewerID.Valid) || (activeInterviewErr == nil && activeInterviewCount > 0)
 
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
 		IsAdmin:          isAdmin,

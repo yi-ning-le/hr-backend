@@ -62,7 +62,6 @@ func main() {
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
-		auth.POST("/logout", authHandler.Logout)
 	}
 
 	// Protected Routes (API)
@@ -72,6 +71,7 @@ func main() {
 		// Auth Routes
 		api.GET("/auth/sessions", authHandler.ListSessions)
 		api.DELETE("/auth/sessions/:id", authHandler.DeleteSession)
+		api.POST("/auth/logout", authHandler.Logout)
 
 		// Job Routes
 		api.GET("/jobs", jobHandler.ListJobs)
@@ -148,10 +148,9 @@ func main() {
 		reviewAPI.POST("/candidates/:id/comments", candidateCommentHandler.CreateComment)
 	}
 
-	// Comments delete needs recruiter role
+	// Comment delete uses service-level author/HR policy.
 	commentAPI := r.Group("/")
 	commentAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
-	commentAPI.Use(middleware.RequireRecruiter(repo))
 	{
 		commentAPI.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment)
 	}

@@ -216,3 +216,59 @@ func TestGetMyRole_NoEmployeeDoesNotGrantReviewCapability(t *testing.T) {
 		t.Errorf("expected canReviewResumes=false for admin without employee profile")
 	}
 }
+
+func TestGetMyRole_DoesNotMutateInterviewerRole(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	userIDStr := "8111b81e-bd11-471a-96e0-24927f906d1e"
+	var employeeIDUUID pgtype.UUID
+	if err := employeeIDUUID.Scan("9111b81e-bd11-471a-96e0-24927f906d1e"); err != nil {
+		t.Fatalf("failed to scan employee id: %v", err)
+	}
+
+	revokeCalled := 0
+	mockRepo := &mocks.MockQuerier{
+		CheckIsAdminFunc: func(ctx context.Context, id pgtype.UUID) (bool, error) {
+			return false, nil
+		},
+		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:               employeeIDUUID,
+				EmployeeType:     "EMPLOYEE",
+				CanReviewResumes: false,
+			}, nil
+		},
+		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return pgtype.UUID{}, errors.New("not recruiter")
+		},
+		GetActiveInterviewCountFunc: func(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+			return 0, nil
+		},
+		CheckInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return pgtype.UUID{}, errors.New("not interviewer")
+		},
+		RevokeInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) error {
+			revokeCalled++
+			return nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", userIDStr)
+		c.Next()
+	})
+	r.GET("/recruitment/role", h.GetMyRole)
+
+	req, _ := http.NewRequest("GET", "/recruitment/role", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	if revokeCalled != 0 {
+		t.Fatalf("expected GetMyRole to be read-only, but revoke was called %d times", revokeCalled)
+	}
+}

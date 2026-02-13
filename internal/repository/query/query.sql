@@ -259,7 +259,10 @@ WHERE id = $1;
 SELECT is_admin FROM users WHERE id = $1 LIMIT 1;
 
 -- name: CheckRecruiterRole :one
-SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1;
+SELECT employee_id
+FROM recruitment_roles
+WHERE employee_id = $1 AND role_type = 'RECRUITER'
+LIMIT 1;
 
 -- name: CheckInterviewerRole :one
 SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER' LIMIT 1;
@@ -267,7 +270,7 @@ SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 AND role_type =
 -- name: AssignInterviewerRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'INTERVIEWER')
-ON CONFLICT (employee_id) DO NOTHING;
+ON CONFLICT (employee_id, role_type) DO NOTHING;
 
 -- name: RevokeInterviewerRole :exec
 DELETE FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER';
@@ -279,10 +282,10 @@ WHERE interviewer_id = $1 AND status = 'PENDING';
 -- name: AssignRecruiterRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'RECRUITER')
-ON CONFLICT (employee_id) DO NOTHING;
+ON CONFLICT (employee_id, role_type) DO NOTHING;
 
 -- name: RevokeRecruiterRole :exec
-DELETE FROM recruitment_roles WHERE employee_id = $1;
+DELETE FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'RECRUITER';
 
 -- name: ListRecruiters :many
 SELECT e.id, e.first_name, e.last_name, e.department, e.phone
@@ -290,6 +293,7 @@ FROM recruitment_roles rr
 JOIN employees e ON rr.employee_id = e.id
 JOIN users u ON e.user_id = u.id
 WHERE u.is_admin = false
+  AND rr.role_type = 'RECRUITER'
 ORDER BY e.first_name;
 
 -- name: GetEmployeeByUserID :one
@@ -373,7 +377,7 @@ SELECT
 FROM candidate_comments cc
 JOIN employees e ON cc.author_id = e.id
 JOIN users u ON e.user_id = u.id
-LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id
+LEFT JOIN recruitment_roles rr ON e.id = rr.employee_id AND rr.role_type = 'RECRUITER'
 WHERE cc.candidate_id = $1
 ORDER BY cc.created_at DESC;
 
@@ -386,10 +390,17 @@ DELETE FROM candidate_comments WHERE id = $1;
 -- Candidate Reviewer queries
 
 -- name: CountCandidateReviewerAssignments :one
-SELECT COUNT(*) FROM candidate_reviewers WHERE reviewer_id = $1;
+SELECT COUNT(*)
+FROM candidate_reviewers
+WHERE reviewer_id = $1 AND removed_at IS NULL;
 
 -- name: IsCandidateReviewer :one
-SELECT id FROM candidate_reviewers WHERE candidate_id = $1 AND reviewer_id = $2 LIMIT 1;
+SELECT id
+FROM candidate_reviewers
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL
+LIMIT 1;
 
 -- name: InsertCandidateReviewer :one
 INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
