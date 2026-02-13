@@ -13,8 +13,10 @@ import (
 type Querier interface {
 	// HR Role queries
 	AssignHRRole(ctx context.Context, id pgtype.UUID) error
+	AssignInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error
 	AssignRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
 	AssignReviewer(ctx context.Context, arg AssignReviewerParams) (AssignReviewerRow, error)
+	CheckInterviewerRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
 	// Recruitment Role queries
 	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
@@ -32,14 +34,21 @@ type Querier interface {
 	// Interview queries
 	CreateInterview(ctx context.Context, arg CreateInterviewParams) (Interview, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
+	// Session queries
+	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	DeactivateSession(ctx context.Context, id pgtype.UUID) error
+	DeactivateUserSessions(ctx context.Context, userID pgtype.UUID) error
 	DeleteCandidate(ctx context.Context, id pgtype.UUID) error
 	DeleteCandidateComment(ctx context.Context, id pgtype.UUID) error
 	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
 	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
+	DeleteExpiredSessions(ctx context.Context) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
+	DeleteSession(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
+	GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
 	GetCandidateComment(ctx context.Context, id pgtype.UUID) (CandidateComment, error)
 	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)
@@ -49,9 +58,12 @@ type Querier interface {
 	GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error)
 	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]Session, error)
 	GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error
+	HasInterviewAssignments(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	InsertCandidateReviewer(ctx context.Context, arg InsertCandidateReviewerParams) (CandidateReviewer, error)
 	IsCandidateReviewer(ctx context.Context, arg IsCandidateReviewerParams) (pgtype.UUID, error)
 	ListCandidateComments(ctx context.Context, candidateID pgtype.UUID) ([]ListCandidateCommentsRow, error)
@@ -65,6 +77,7 @@ type Querier interface {
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
+	RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
 	SubmitReview(ctx context.Context, arg SubmitReviewParams) (SubmitReviewRow, error)
 	TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error)

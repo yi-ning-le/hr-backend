@@ -67,8 +67,12 @@ func main() {
 
 	// Protected Routes (API)
 	api := r.Group("/")
-	api.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	api.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	{
+		// Auth Routes
+		api.GET("/auth/sessions", authHandler.ListSessions)
+		api.DELETE("/auth/sessions/:id", authHandler.DeleteSession)
+
 		// Job Routes
 		api.GET("/jobs", jobHandler.ListJobs)
 
@@ -90,7 +94,7 @@ func main() {
 	}
 
 	recruitmentWriteAPI := r.Group("/")
-	recruitmentWriteAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	recruitmentWriteAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	recruitmentWriteAPI.Use(middleware.RequireRecruiter(repo))
 	{
 		// Job write routes
@@ -123,7 +127,7 @@ func main() {
 	// HR-only Employee Routes (Create, Update, Delete)
 	hrQuerier := middleware.NewQueriesAdapter(repo)
 	hrApi := r.Group("/")
-	hrApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	hrApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	hrApi.Use(middleware.RequireHR(hrQuerier))
 	{
 		hrApi.POST("/employees", employeeHandler.CreateEmployee)
@@ -133,7 +137,7 @@ func main() {
 
 	// Reviewer-only action (resolved by candidate assignment check in handler/service)
 	reviewAPI := r.Group("/")
-	reviewAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	reviewAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	reviewAPI.Use(middleware.RequireInterviewerOrRecruiter(hrQuerier))
 	reviewAPI.Use(middleware.RequireCandidateReviewer(hrQuerier))
 	{
@@ -146,7 +150,7 @@ func main() {
 
 	// Comments delete needs recruiter role
 	commentAPI := r.Group("/")
-	commentAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	commentAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	commentAPI.Use(middleware.RequireRecruiter(repo))
 	{
 		commentAPI.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment)
@@ -154,7 +158,7 @@ func main() {
 
 	// Admin only Recruitment Routes
 	adminApi := r.Group("/recruitment/admin")
-	adminApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	adminApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	adminApi.Use(middleware.RequireAdmin(repo))
 	{
 		adminApi.GET("/recruiters", recruitmentHandler.GetRecruiters)
@@ -168,7 +172,7 @@ func main() {
 
 	// Recruiter only Routes
 	recruiterApi := r.Group("/recruitment")
-	recruiterApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	recruiterApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	recruiterApi.Use(middleware.RequireRecruiter(repo))
 	{
 		recruiterApi.POST("/interviews", recruitmentHandler.CreateInterview)
@@ -178,7 +182,7 @@ func main() {
 	// Interviewer Routes (Employee access)
 	interviewerQueries := middleware.NewQueriesAdapter(repo)
 	interviewApi := r.Group("/recruitment")
-	interviewApi.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	interviewApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	interviewApi.Use(middleware.RequireInterviewerOrRecruiter(interviewerQueries))
 	{
 		interviewApi.GET("/interviews/me", recruitmentHandler.GetMyInterviews)

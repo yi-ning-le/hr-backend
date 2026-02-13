@@ -132,6 +132,12 @@ func TestGetMyRole_UsesExplicitReviewCapability(t *testing.T) {
 		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
 			return pgtype.UUID{}, errors.New("not recruiter")
 		},
+		GetActiveInterviewCountFunc: func(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
+			return 1, nil
+		},
+		CheckInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+			return employeeIDUUID, nil
+		},
 	}
 
 	h := handler.NewRecruitmentHandler(mockRepo)

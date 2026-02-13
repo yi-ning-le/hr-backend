@@ -25,6 +25,17 @@ func (q *Queries) AssignHRRole(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const assignInterviewerRole = `-- name: AssignInterviewerRole :exec
+INSERT INTO recruitment_roles (employee_id, role_type)
+VALUES ($1, 'INTERVIEWER')
+ON CONFLICT (employee_id) DO NOTHING
+`
+
+func (q *Queries) AssignInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, assignInterviewerRole, employeeID)
+	return err
+}
+
 const assignRecruiterRole = `-- name: AssignRecruiterRole :exec
 INSERT INTO recruitment_roles (employee_id, role_type)
 VALUES ($1, 'RECRUITER')
@@ -96,6 +107,17 @@ func (q *Queries) AssignReviewer(ctx context.Context, arg AssignReviewerParams) 
 		&i.AppliedJobTitle,
 	)
 	return i, err
+}
+
+const checkInterviewerRole = `-- name: CheckInterviewerRole :one
+SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER' LIMIT 1
+`
+
+func (q *Queries) CheckInterviewerRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, checkInterviewerRole, employeeID)
+	var employee_id pgtype.UUID
+	err := row.Scan(&employee_id)
+	return employee_id, err
 }
 
 const checkIsAdmin = `-- name: CheckIsAdmin :one
@@ -483,6 +505,47 @@ func (q *Queries) CreateJob(ctx context.Context, arg CreateJobParams) (Job, erro
 	return i, err
 }
 
+const createSession = `-- name: CreateSession :one
+
+INSERT INTO sessions (
+  user_id, device_info, ip_address, user_agent, expires_at
+) VALUES (
+  $1, $2, $3, $4, $5
+)
+RETURNING id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active
+`
+
+type CreateSessionParams struct {
+	UserID     pgtype.UUID        `json:"user_id"`
+	DeviceInfo []byte             `json:"device_info"`
+	IpAddress  pgtype.Text        `json:"ip_address"`
+	UserAgent  pgtype.Text        `json:"user_agent"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+}
+
+// Session queries
+func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error) {
+	row := q.db.QueryRow(ctx, createSession,
+		arg.UserID,
+		arg.DeviceInfo,
+		arg.IpAddress,
+		arg.UserAgent,
+		arg.ExpiresAt,
+	)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DeviceInfo,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.IsActive,
+	)
+	return i, err
+}
+
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (username, email, password_hash, avatar)
 VALUES ($1, $2, $3, $4)
@@ -515,6 +578,28 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.IsAdmin,
 	)
 	return i, err
+}
+
+const deactivateSession = `-- name: DeactivateSession :exec
+UPDATE sessions
+SET is_active = false
+WHERE id = $1
+`
+
+func (q *Queries) DeactivateSession(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deactivateSession, id)
+	return err
+}
+
+const deactivateUserSessions = `-- name: DeactivateUserSessions :exec
+UPDATE sessions
+SET is_active = false
+WHERE user_id = $1
+`
+
+func (q *Queries) DeactivateUserSessions(ctx context.Context, userID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deactivateUserSessions, userID)
+	return err
 }
 
 const deleteCandidate = `-- name: DeleteCandidate :exec
@@ -556,6 +641,16 @@ func (q *Queries) DeleteEmployee(ctx context.Context, id pgtype.UUID) error {
 	return err
 }
 
+const deleteExpiredSessions = `-- name: DeleteExpiredSessions :exec
+DELETE FROM sessions 
+WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP
+`
+
+func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
+	_, err := q.db.Exec(ctx, deleteExpiredSessions)
+	return err
+}
+
 const deleteJob = `-- name: DeleteJob :exec
 DELETE FROM jobs
 WHERE id = $1
@@ -563,6 +658,15 @@ WHERE id = $1
 
 func (q *Queries) DeleteJob(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, deleteJob, id)
+	return err
+}
+
+const deleteSession = `-- name: DeleteSession :exec
+DELETE FROM sessions WHERE id = $1
+`
+
+func (q *Queries) DeleteSession(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, deleteSession, id)
 	return err
 }
 
@@ -585,6 +689,26 @@ func (q *Queries) GetActiveInterviewCount(ctx context.Context, interviewerID pgt
 	var count int64
 	err := row.Scan(&count)
 	return count, err
+}
+
+const getActiveSessionByID = `-- name: GetActiveSessionByID :one
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1
+`
+
+func (q *Queries) GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getActiveSessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DeviceInfo,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.IsActive,
+	)
+	return i, err
 }
 
 const getCandidate = `-- name: GetCandidate :one
@@ -832,6 +956,26 @@ func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
 	return i, err
 }
 
+const getSessionByID = `-- name: GetSessionByID :one
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, getSessionByID, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DeviceInfo,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.IsActive,
+	)
+	return i, err
+}
+
 const getUserByID = `-- name: GetUserByID :one
 SELECT id, username, email, password_hash, avatar, created_at, updated_at, is_admin FROM users WHERE id = $1 LIMIT 1
 `
@@ -872,6 +1016,41 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserSessions = `-- name: GetUserSessions :many
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions 
+WHERE user_id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]Session, error) {
+	rows, err := q.db.Query(ctx, getUserSessions, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Session
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.DeviceInfo,
+			&i.IpAddress,
+			&i.UserAgent,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+			&i.IsActive,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const grantResumeReviewCapability = `-- name: GrantResumeReviewCapability :exec
 UPDATE employees
 SET can_review_resumes = TRUE,
@@ -882,6 +1061,17 @@ WHERE id = $1
 func (q *Queries) GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, grantResumeReviewCapability, id)
 	return err
+}
+
+const hasInterviewAssignments = `-- name: HasInterviewAssignments :one
+SELECT EXISTS(SELECT 1 FROM interviews WHERE interviewer_id = $1)
+`
+
+func (q *Queries) HasInterviewAssignments(ctx context.Context, interviewerID pgtype.UUID) (bool, error) {
+	row := q.db.QueryRow(ctx, hasInterviewAssignments, interviewerID)
+	var exists bool
+	err := row.Scan(&exists)
+	return exists, err
 }
 
 const insertCandidateReviewer = `-- name: InsertCandidateReviewer :one
@@ -1414,6 +1604,15 @@ WHERE id = $1
 
 func (q *Queries) RevokeHRRole(ctx context.Context, id pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, revokeHRRole, id)
+	return err
+}
+
+const revokeInterviewerRole = `-- name: RevokeInterviewerRole :exec
+DELETE FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER'
+`
+
+func (q *Queries) RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, revokeInterviewerRole, employeeID)
 	return err
 }
 

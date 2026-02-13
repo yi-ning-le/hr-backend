@@ -7,17 +7,23 @@ import (
 )
 
 type JWTClaims struct {
-	UserID   string `json:"userId"`
-	Username string `json:"username"`
+	UserID    string `json:"userId"`
+	Username  string `json:"username"`
+	SessionID string `json:"sessionId"`
 	jwt.RegisteredClaims
 }
 
 func GenerateToken(userID, username, secret string) (string, error) {
+	return GenerateTokenWithSession(userID, username, "", secret)
+}
+
+func GenerateTokenWithSession(userID, username, sessionID, secret string) (string, error) {
 	claims := JWTClaims{
-		UserID:   userID,
-		Username: username,
+		UserID:    userID,
+		Username:  username,
+		SessionID: sessionID,
 		RegisteredClaims: jwt.RegisteredClaims{
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)), // Token valid for 24 hours
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(24 * time.Hour)),
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
 		},
 	}

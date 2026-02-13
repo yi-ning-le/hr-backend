@@ -70,10 +70,19 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
 
+	// Check and maintain INTERVIEWER role
+	activeInterviewCount, _ := h.queries.GetActiveInterviewCount(ctx, employee.ID)
+	if activeInterviewCount == 0 {
+		_ = h.queries.RevokeInterviewerRole(ctx, employee.ID)
+	}
+
+	interviewerID, _ := h.queries.CheckInterviewerRole(ctx, employee.ID)
+	isInterviewer := interviewerID.Valid
+
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
 		IsAdmin:          isAdmin,
 		IsRecruiter:      isRecruiter,
-		IsInterviewer:    canReviewResumes, // Backward compatible alias.
+		IsInterviewer:    isInterviewer,
 		IsHR:             isHR,
 		CanReviewResumes: canReviewResumes,
 	})
@@ -299,6 +308,9 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
 		return
 	}
+
+	// Grant INTERVIEWER role to the assigned interviewer
+	_ = h.queries.AssignInterviewerRole(ctx, interviewerID)
 
 	c.JSON(http.StatusCreated, model.Interview{
 		ID:            uuidToString(interview.ID),

@@ -109,6 +109,17 @@ type RecruitmentRole struct {
 	CreatedAt  pgtype.Timestamptz `json:"created_at"`
 }
 
+type Session struct {
+	ID         pgtype.UUID        `json:"id"`
+	UserID     pgtype.UUID        `json:"user_id"`
+	DeviceInfo []byte             `json:"device_info"`
+	IpAddress  pgtype.Text        `json:"ip_address"`
+	UserAgent  pgtype.Text        `json:"user_agent"`
+	CreatedAt  pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt  pgtype.Timestamptz `json:"expires_at"`
+	IsActive   pgtype.Bool        `json:"is_active"`
+}
+
 type User struct {
 	ID           pgtype.UUID        `json:"id"`
 	Username     string             `json:"username"`

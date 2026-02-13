@@ -26,7 +26,6 @@ func (h *AuthHandler) Register(c *gin.Context) {
 
 	user, err := h.service.Register(c.Request.Context(), input)
 	if err != nil {
-		// Could be duplicate entry or other DB error
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Registration failed. Username or Email may already exist."})
 		return
 	}
@@ -41,7 +40,15 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
-	response, err := h.service.Login(c.Request.Context(), input)
+	var deviceInfo service.DeviceInfo
+	if ua := c.GetHeader("User-Agent"); ua != "" {
+		deviceInfo.UserAgent = ua
+	}
+	if ip := c.ClientIP(); ip != "" {
+		deviceInfo.IP = ip
+	}
+
+	response, err := h.service.LoginWithDevice(c.Request.Context(), input, deviceInfo)
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid username or password"})
 		return
@@ -51,7 +58,81 @@ func (h *AuthHandler) Login(c *gin.Context) {
 }
 
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// For stateless JWT, we just return success.
-	// The client will delete the token.
+	sessionID, exists := c.Get("sessionID")
+	if !exists || sessionID == "" {
+		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+		return
+	}
+
+	err := h.service.Logout(c.Request.Context(), sessionID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to logout"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
+}
+
+func (h *AuthHandler) ListSessions(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	sessions, err := h.service.GetSessions(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get sessions"})
+		return
+	}
+
+	currentSessionID, _ := c.Get("sessionID")
+	for i := range sessions {
+		if sessions[i].ID == currentSessionID {
+			sessions[i].IsActive = true
+		}
+	}
+
+	c.JSON(http.StatusOK, model.SessionListResponse{Sessions: sessions})
+}
+
+func (h *AuthHandler) DeleteSession(c *gin.Context) {
+	sessionID := c.Param("id")
+	if sessionID == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Session ID required"})
+		return
+	}
+
+	currentUserID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	sessions, err := h.service.GetSessions(c.Request.Context(), currentUserID.(string))
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get sessions"})
+		return
+	}
+
+	var sessionFound bool
+	for _, s := range sessions {
+		if s.ID == sessionID {
+			sessionFound = true
+			break
+		}
+	}
+
+	if !sessionFound {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+		return
+	}
+
+	err = h.service.Logout(c.Request.Context(), sessionID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Session deleted successfully"})
 }

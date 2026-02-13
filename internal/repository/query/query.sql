@@ -261,6 +261,17 @@ SELECT is_admin FROM users WHERE id = $1 LIMIT 1;
 -- name: CheckRecruiterRole :one
 SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 LIMIT 1;
 
+-- name: CheckInterviewerRole :one
+SELECT employee_id FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER' LIMIT 1;
+
+-- name: AssignInterviewerRole :exec
+INSERT INTO recruitment_roles (employee_id, role_type)
+VALUES ($1, 'INTERVIEWER')
+ON CONFLICT (employee_id) DO NOTHING;
+
+-- name: RevokeInterviewerRole :exec
+DELETE FROM recruitment_roles WHERE employee_id = $1 AND role_type = 'INTERVIEWER';
+
 -- name: GetActiveInterviewCount :one
 SELECT COUNT(*) FROM interviews 
 WHERE interviewer_id = $1 AND status = 'PENDING';
@@ -301,6 +312,9 @@ SELECT * FROM interviews WHERE id = $1 LIMIT 1;
 SELECT * FROM interviews
 WHERE interviewer_id = $1
 ORDER BY scheduled_time DESC;
+
+-- name: HasInterviewAssignments :one
+SELECT EXISTS(SELECT 1 FROM interviews WHERE interviewer_id = $1);
 
 -- name: TransferInterview :one
 UPDATE interviews
@@ -402,3 +416,41 @@ JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE cr.reviewer_id = $1
 ORDER BY cr.assigned_at DESC;
+
+-- Session queries
+
+-- name: CreateSession :one
+INSERT INTO sessions (
+  user_id, device_info, ip_address, user_agent, expires_at
+) VALUES (
+  $1, $2, $3, $4, $5
+)
+RETURNING *;
+
+-- name: GetSessionByID :one
+SELECT * FROM sessions WHERE id = $1 LIMIT 1;
+
+-- name: GetActiveSessionByID :one
+SELECT * FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1;
+
+-- name: GetUserSessions :many
+SELECT * FROM sessions 
+WHERE user_id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+ORDER BY created_at DESC;
+
+-- name: DeactivateSession :exec
+UPDATE sessions
+SET is_active = false
+WHERE id = $1;
+
+-- name: DeactivateUserSessions :exec
+UPDATE sessions
+SET is_active = false
+WHERE user_id = $1;
+
+-- name: DeleteSession :exec
+DELETE FROM sessions WHERE id = $1;
+
+-- name: DeleteExpiredSessions :exec
+DELETE FROM sessions 
+WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP;

@@ -2,7 +2,9 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"time"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -10,6 +12,14 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 )
+
+type DeviceInfo struct {
+	Browser   string `json:"browser"`
+	OS        string `json:"os"`
+	Platform  string `json:"platform"`
+	IP        string `json:"ip"`
+	UserAgent string `json:"userAgent"`
+}
 
 type AuthService struct {
 	repo       repository.Querier
@@ -31,7 +41,6 @@ func NewAuthService(repo repository.Querier, jwtSecret string, txBeginner ...TxB
 }
 
 func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (*model.User, error) {
-	// 1. Hash Password
 	hashedPassword, err := utils.HashPassword(input.Password)
 	if err != nil {
 		return nil, err
@@ -55,7 +64,7 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 		FirstName:      firstName,
 		LastName:       lastName,
 		Email:          input.Email,
-		Phone:          "", // Optional
+		Phone:          "",
 		Department:     "Unassigned",
 		Position:       "New Hire",
 		Status:         "Active",
@@ -106,25 +115,50 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 }
 
 func (s *AuthService) Login(ctx context.Context, input model.LoginInput) (*model.AuthResponse, error) {
-	// 1. Find User
+	return s.LoginWithDevice(ctx, input, DeviceInfo{})
+}
+
+func (s *AuthService) LoginWithDevice(ctx context.Context, input model.LoginInput, device DeviceInfo) (*model.AuthResponse, error) {
 	user, err := s.repo.GetUserByUsername(ctx, input.Username)
 	if err != nil {
 		return nil, errors.New("invalid credentials")
 	}
 
-	// 2. Check Password
 	if !utils.CheckPasswordHash(input.Password, user.PasswordHash) {
 		return nil, errors.New("invalid credentials")
 	}
 
-	// 3. Generate Token
-	token, err := utils.GenerateToken(utils.UUIDToString(user.ID), user.Username, s.jwtSecret)
+	userID := user.ID
+	deviceJSON, _ := json.Marshal(device)
+	expiresAt := pgtype.Timestamptz{
+		Time:  time.Now().Add(24 * time.Hour),
+		Valid: true,
+	}
+
+	session, err := s.repo.CreateSession(ctx, repository.CreateSessionParams{
+		UserID:     userID,
+		DeviceInfo: deviceJSON,
+		IpAddress:  pgtype.Text{String: device.IP, Valid: device.IP != ""},
+		UserAgent:  pgtype.Text{String: device.UserAgent, Valid: device.UserAgent != ""},
+		ExpiresAt:  expiresAt,
+	})
+	if err != nil {
+		return nil, errors.New("failed to create session: " + err.Error())
+	}
+
+	token, err := utils.GenerateTokenWithSession(
+		utils.UUIDToString(user.ID),
+		user.Username,
+		utils.UUIDToString(session.ID),
+		s.jwtSecret,
+	)
 	if err != nil {
 		return nil, err
 	}
 
 	return &model.AuthResponse{
-		Token: token,
+		Token:     token,
+		SessionID: utils.UUIDToString(session.ID),
 		User: model.User{
 			ID:        utils.UUIDToString(user.ID),
 			Username:  user.Username,
@@ -133,4 +167,72 @@ func (s *AuthService) Login(ctx context.Context, input model.LoginInput) (*model
 			CreatedAt: user.CreatedAt.Time,
 		},
 	}, nil
+}
+
+func (s *AuthService) Logout(ctx context.Context, sessionID string) error {
+	sessionUUID, err := utils.StringToUUID(sessionID)
+	if err != nil {
+		return errors.New("invalid session ID")
+	}
+
+	_, err = s.repo.GetActiveSessionByID(ctx, sessionUUID)
+	if err != nil {
+		return errors.New("session not found or already expired")
+	}
+
+	return s.repo.DeactivateSession(ctx, sessionUUID)
+}
+
+func (s *AuthService) LogoutAll(ctx context.Context, userID string) error {
+	userUUID, err := utils.StringToUUID(userID)
+	if err != nil {
+		return errors.New("invalid user ID")
+	}
+
+	return s.repo.DeactivateUserSessions(ctx, userUUID)
+}
+
+func (s *AuthService) GetSessions(ctx context.Context, userID string) ([]model.SessionInfo, error) {
+	userUUID, err := utils.StringToUUID(userID)
+	if err != nil {
+		return nil, errors.New("invalid user ID")
+	}
+
+	sessions, err := s.repo.GetUserSessions(ctx, userUUID)
+	if err != nil {
+		return nil, err
+	}
+
+	var result []model.SessionInfo
+	for _, session := range sessions {
+		var deviceInfo DeviceInfo
+		_ = json.Unmarshal(session.DeviceInfo, &deviceInfo)
+
+		result = append(result, model.SessionInfo{
+			ID:         utils.UUIDToString(session.ID),
+			UserID:     utils.UUIDToString(session.UserID),
+			DeviceInfo: deviceInfo,
+			IPAddress:  session.IpAddress.String,
+			UserAgent:  session.UserAgent.String,
+			CreatedAt:  session.CreatedAt.Time,
+			ExpiresAt:  session.ExpiresAt.Time,
+			IsActive:   session.IsActive.Bool,
+		})
+	}
+
+	return result, nil
+}
+
+func (s *AuthService) ValidateSession(ctx context.Context, sessionID string) error {
+	sessionUUID, err := utils.StringToUUID(sessionID)
+	if err != nil {
+		return errors.New("invalid session ID")
+	}
+
+	_, err = s.repo.GetActiveSessionByID(ctx, sessionUUID)
+	if err != nil {
+		return errors.New("session not found or expired")
+	}
+
+	return nil
 }

@@ -52,16 +52,20 @@ type MockQuerier struct {
 
 	// Recruitment mock functions
 	AssignRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
+	AssignInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	CheckIsAdminFunc                func(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckRecruiterRoleFunc          func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	CheckInterviewerRoleFunc        func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
 	GetActiveInterviewCountFunc     func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
 	GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
 	RevokeRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
+	RevokeInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
 	GetEmployeeByUserIDFunc         func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error)
 	CreateInterviewFunc             func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error)
 	GetInterviewFunc                func(ctx context.Context, id pgtype.UUID) (repository.Interview, error)
 	ListInterviewsByInterviewerFunc func(ctx context.Context, interviewerID pgtype.UUID) ([]repository.Interview, error)
+	HasInterviewAssignmentsFunc     func(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	TransferInterviewFunc           func(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error)
 	UpdateInterviewStatusFunc       func(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error)
 	UpdateInterviewNoteFunc         func(ctx context.Context, arg repository.UpdateInterviewNoteParams) (repository.Interview, error)
@@ -84,6 +88,16 @@ type MockQuerier struct {
 	InsertCandidateReviewerFunc           func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error)
 	UpdateCandidateReviewerRemovedAtFunc  func(ctx context.Context, candidateID pgtype.UUID) error
 	ListReviewedCandidatesFunc            func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error)
+
+	// Session mock functions
+	CreateSessionFunc          func(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error)
+	GetSessionByIDFunc         func(ctx context.Context, id pgtype.UUID) (repository.Session, error)
+	GetActiveSessionByIDFunc   func(ctx context.Context, id pgtype.UUID) (repository.Session, error)
+	GetUserSessionsFunc        func(ctx context.Context, userID pgtype.UUID) ([]repository.Session, error)
+	DeactivateSessionFunc      func(ctx context.Context, id pgtype.UUID) error
+	DeactivateUserSessionsFunc func(ctx context.Context, userID pgtype.UUID) error
+	DeleteExpiredSessionsFunc  func(ctx context.Context) error
+	DeleteSessionFunc          func(ctx context.Context, id pgtype.UUID) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -266,6 +280,12 @@ func (m *MockQuerier) CheckRecruiterRole(ctx context.Context, employeeID pgtype.
 	}
 	return pgtype.UUID{}, nil
 }
+func (m *MockQuerier) CheckInterviewerRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
+	if m.CheckInterviewerRoleFunc != nil {
+		return m.CheckInterviewerRoleFunc(ctx, employeeID)
+	}
+	return pgtype.UUID{}, nil
+}
 func (m *MockQuerier) GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error) {
 	if m.GetActiveInterviewCountFunc != nil {
 		return m.GetActiveInterviewCountFunc(ctx, interviewerID)
@@ -278,9 +298,21 @@ func (m *MockQuerier) GrantResumeReviewCapability(ctx context.Context, id pgtype
 	}
 	return nil
 }
+func (m *MockQuerier) AssignInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error {
+	if m.AssignInterviewerRoleFunc != nil {
+		return m.AssignInterviewerRoleFunc(ctx, employeeID)
+	}
+	return nil
+}
 func (m *MockQuerier) RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error {
 	if m.RevokeRecruiterRoleFunc != nil {
 		return m.RevokeRecruiterRoleFunc(ctx, employeeID)
+	}
+	return nil
+}
+func (m *MockQuerier) RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error {
+	if m.RevokeInterviewerRoleFunc != nil {
+		return m.RevokeInterviewerRoleFunc(ctx, employeeID)
 	}
 	return nil
 }
@@ -313,6 +345,12 @@ func (m *MockQuerier) ListInterviewsByInterviewer(ctx context.Context, interview
 		return m.ListInterviewsByInterviewerFunc(ctx, interviewerID)
 	}
 	return nil, nil
+}
+func (m *MockQuerier) HasInterviewAssignments(ctx context.Context, interviewerID pgtype.UUID) (bool, error) {
+	if m.HasInterviewAssignmentsFunc != nil {
+		return m.HasInterviewAssignmentsFunc(ctx, interviewerID)
+	}
+	return false, nil
 }
 func (m *MockQuerier) TransferInterview(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error) {
 	if m.TransferInterviewFunc != nil {
@@ -428,4 +466,60 @@ func (m *MockQuerier) ListReviewedCandidates(ctx context.Context, reviewerID pgt
 		return m.ListReviewedCandidatesFunc(ctx, reviewerID)
 	}
 	return nil, nil
+}
+
+func (m *MockQuerier) CreateSession(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
+	if m.CreateSessionFunc != nil {
+		return m.CreateSessionFunc(ctx, arg)
+	}
+	return repository.Session{}, nil
+}
+
+func (m *MockQuerier) GetSessionByID(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+	if m.GetSessionByIDFunc != nil {
+		return m.GetSessionByIDFunc(ctx, id)
+	}
+	return repository.Session{}, nil
+}
+
+func (m *MockQuerier) GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+	if m.GetActiveSessionByIDFunc != nil {
+		return m.GetActiveSessionByIDFunc(ctx, id)
+	}
+	return repository.Session{}, nil
+}
+
+func (m *MockQuerier) GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]repository.Session, error) {
+	if m.GetUserSessionsFunc != nil {
+		return m.GetUserSessionsFunc(ctx, userID)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) DeactivateSession(ctx context.Context, id pgtype.UUID) error {
+	if m.DeactivateSessionFunc != nil {
+		return m.DeactivateSessionFunc(ctx, id)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeactivateUserSessions(ctx context.Context, userID pgtype.UUID) error {
+	if m.DeactivateUserSessionsFunc != nil {
+		return m.DeactivateUserSessionsFunc(ctx, userID)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteExpiredSessions(ctx context.Context) error {
+	if m.DeleteExpiredSessionsFunc != nil {
+		return m.DeleteExpiredSessionsFunc(ctx)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteSession(ctx context.Context, id pgtype.UUID) error {
+	if m.DeleteSessionFunc != nil {
+		return m.DeleteSessionFunc(ctx, id)
+	}
+	return nil
 }

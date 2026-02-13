@@ -84,8 +84,9 @@ type User struct {
 }
 
 type AuthResponse struct {
-	Token string `json:"token"`
-	User  User   `json:"user"`
+	Token     string `json:"token"`
+	SessionID string `json:"sessionId"`
+	User      User   `json:"user"`
 }
 
 // --- Employee Models ---
@@ -170,4 +171,19 @@ type CandidateComment struct {
 
 type CreateCommentInput struct {
 	Content string `json:"content" binding:"required"`
+}
+
+type SessionInfo struct {
+	ID         string      `json:"id"`
+	UserID     string      `json:"userId"`
+	DeviceInfo interface{} `json:"deviceInfo"`
+	IPAddress  string      `json:"ipAddress"`
+	UserAgent  string      `json:"userAgent"`
+	CreatedAt  time.Time   `json:"createdAt"`
+	ExpiresAt  time.Time   `json:"expiresAt,omitempty"`
+	IsActive   bool        `json:"isActive"`
+}
+
+type SessionListResponse struct {
+	Sessions []SessionInfo `json:"sessions"`
 }
