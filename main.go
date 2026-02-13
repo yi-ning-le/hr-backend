@@ -135,13 +135,21 @@ func main() {
 	reviewAPI := r.Group("/")
 	reviewAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
 	reviewAPI.Use(middleware.RequireInterviewerOrRecruiter(hrQuerier))
+	reviewAPI.Use(middleware.RequireCandidateReviewer(hrQuerier))
 	{
 		reviewAPI.POST("/candidates/:id/review", candidateHandler.SubmitReview)
 
 		// Candidate Comments
 		reviewAPI.GET("/candidates/:id/comments", candidateCommentHandler.ListComments)
 		reviewAPI.POST("/candidates/:id/comments", candidateCommentHandler.CreateComment)
-		reviewAPI.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment)
+	}
+
+	// Comments delete needs recruiter role
+	commentAPI := r.Group("/")
+	commentAPI.Use(middleware.AuthMiddleware(cfg.JWTSecret))
+	commentAPI.Use(middleware.RequireRecruiter(repo))
+	{
+		commentAPI.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment)
 	}
 
 	// Admin only Recruitment Routes

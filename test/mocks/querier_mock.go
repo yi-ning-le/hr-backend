@@ -77,6 +77,13 @@ type MockQuerier struct {
 	ListCandidateCommentsFunc  func(ctx context.Context, candidateID pgtype.UUID) ([]repository.ListCandidateCommentsRow, error)
 	GetCandidateCommentFunc    func(ctx context.Context, id pgtype.UUID) (repository.CandidateComment, error)
 	DeleteCandidateCommentFunc func(ctx context.Context, id pgtype.UUID) error
+
+	// Candidate Reviewer mock functions
+	CountCandidateReviewerAssignmentsFunc func(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
+	IsCandidateReviewerFunc               func(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error)
+	InsertCandidateReviewerFunc           func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error)
+	UpdateCandidateReviewerRemovedAtFunc  func(ctx context.Context, candidateID pgtype.UUID) error
+	ListReviewedCandidatesFunc            func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error)
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -385,4 +392,40 @@ func (m *MockQuerier) DeleteCandidateComment(ctx context.Context, id pgtype.UUID
 		return m.DeleteCandidateCommentFunc(ctx, id)
 	}
 	return nil
+}
+
+// Candidate Reviewer methods
+func (m *MockQuerier) CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error) {
+	if m.CountCandidateReviewerAssignmentsFunc != nil {
+		return m.CountCandidateReviewerAssignmentsFunc(ctx, reviewerID)
+	}
+	return 0, nil
+}
+
+func (m *MockQuerier) IsCandidateReviewer(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error) {
+	if m.IsCandidateReviewerFunc != nil {
+		return m.IsCandidateReviewerFunc(ctx, arg)
+	}
+	return pgtype.UUID{}, nil
+}
+
+func (m *MockQuerier) InsertCandidateReviewer(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error) {
+	if m.InsertCandidateReviewerFunc != nil {
+		return m.InsertCandidateReviewerFunc(ctx, arg)
+	}
+	return repository.CandidateReviewer{}, nil
+}
+
+func (m *MockQuerier) UpdateCandidateReviewerRemovedAt(ctx context.Context, candidateID pgtype.UUID) error {
+	if m.UpdateCandidateReviewerRemovedAtFunc != nil {
+		return m.UpdateCandidateReviewerRemovedAtFunc(ctx, candidateID)
+	}
+	return nil
+}
+
+func (m *MockQuerier) ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error) {
+	if m.ListReviewedCandidatesFunc != nil {
+		return m.ListReviewedCandidatesFunc(ctx, reviewerID)
+	}
+	return nil, nil
 }

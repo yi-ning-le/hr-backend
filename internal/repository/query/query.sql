@@ -375,3 +375,30 @@ SELECT * FROM candidate_comments WHERE id = $1 LIMIT 1;
 
 -- name: DeleteCandidateComment :exec
 DELETE FROM candidate_comments WHERE id = $1;
+
+-- Candidate Reviewer queries
+
+-- name: CountCandidateReviewerAssignments :one
+SELECT COUNT(*) FROM candidate_reviewers WHERE reviewer_id = $1;
+
+-- name: IsCandidateReviewer :one
+SELECT id FROM candidate_reviewers WHERE candidate_id = $1 AND reviewer_id = $2 LIMIT 1;
+
+-- name: InsertCandidateReviewer :one
+INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
+VALUES ($1, $2)
+ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET assigned_at = CURRENT_TIMESTAMP, removed_at = NULL
+RETURNING *;
+
+-- name: UpdateCandidateReviewerRemovedAt :exec
+UPDATE candidate_reviewers
+SET removed_at = CURRENT_TIMESTAMP
+WHERE candidate_id = $1 AND removed_at IS NULL;
+
+-- name: ListReviewedCandidates :many
+SELECT c.*, j.title as applied_job_title, cr.assigned_at, cr.removed_at
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+ORDER BY cr.assigned_at DESC;

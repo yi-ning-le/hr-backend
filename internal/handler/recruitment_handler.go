@@ -62,6 +62,11 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 
 	canReviewResumes := employee.CanReviewResumes
 
+	reviewerCount, err := h.queries.CountCandidateReviewerAssignments(ctx, employee.ID)
+	if err == nil && reviewerCount > 0 {
+		canReviewResumes = true
+	}
+
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
 

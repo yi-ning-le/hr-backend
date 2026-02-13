@@ -163,6 +163,14 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 		return nil, err
 	}
 
+	_, err = s.repo.InsertCandidateReviewer(ctx, repository.InsertCandidateReviewerParams{
+		CandidateID: uuid,
+		ReviewerID:  reviewerUUID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return mapAssignReviewerRowToModel(row), nil
 }
 
@@ -286,6 +294,11 @@ func (s *CandidateService) UpdateStatus(ctx context.Context, id string, status s
 	if err != nil {
 		return nil, err
 	}
+
+	if status == "hired" || status == "rejected" {
+		_ = s.repo.UpdateCandidateReviewerRemovedAt(ctx, uuid)
+	}
+
 	return s.GetCandidate(ctx, id)
 }
 

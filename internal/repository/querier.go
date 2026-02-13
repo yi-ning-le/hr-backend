@@ -19,6 +19,8 @@ type Querier interface {
 	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	// Candidate Reviewer queries
+	CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
 	CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error)
 	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
@@ -50,6 +52,8 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error
+	InsertCandidateReviewer(ctx context.Context, arg InsertCandidateReviewerParams) (CandidateReviewer, error)
+	IsCandidateReviewer(ctx context.Context, arg IsCandidateReviewerParams) (pgtype.UUID, error)
 	ListCandidateComments(ctx context.Context, candidateID pgtype.UUID) ([]ListCandidateCommentsRow, error)
 	// Candidate Status queries
 	ListCandidateStatuses(ctx context.Context) ([]CandidateStatus, error)
@@ -59,12 +63,14 @@ type Querier interface {
 	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
+	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
 	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
 	SubmitReview(ctx context.Context, arg SubmitReviewParams) (SubmitReviewRow, error)
 	TransferInterview(ctx context.Context, arg TransferInterviewParams) (Interview, error)
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)
 	UpdateCandidateResume(ctx context.Context, arg UpdateCandidateResumeParams) (Candidate, error)
+	UpdateCandidateReviewerRemovedAt(ctx context.Context, candidateID pgtype.UUID) error
 	UpdateCandidateStatus(ctx context.Context, arg UpdateCandidateStatusParams) (Candidate, error)
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)
 	UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error

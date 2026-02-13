@@ -46,6 +46,18 @@ func (a *QueriesAdapter) GetActiveInterviewCount(ctx context.Context, interviewe
 	return a.q.GetActiveInterviewCount(ctx, interviewerID)
 }
 
+func (a *QueriesAdapter) IsCandidateReviewer(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error) {
+	return a.q.IsCandidateReviewer(ctx, arg)
+}
+
+func (a *QueriesAdapter) GetEmployee(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+	return a.q.GetEmployee(ctx, id)
+}
+
+func (a *QueriesAdapter) CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error) {
+	return a.q.CountCandidateReviewerAssignments(ctx, reviewerID)
+}
+
 // RequireAdmin middleware checks if the current user is an admin
 func RequireAdmin(queries *repository.Queries) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -245,12 +257,66 @@ func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interviewer access"})
 			return
 		}
-		if activeInterviewCount <= 0 {
-			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Interviewer access required"})
+		if activeInterviewCount > 0 {
+			c.Set("employeeID", uuidToString(employee.ID))
+			c.Next()
 			return
 		}
 
-		c.Set("employeeID", uuidToString(employee.ID))
+		reviewerCount, err := queries.CountCandidateReviewerAssignments(ctx, employee.ID)
+		if err == nil && reviewerCount > 0 {
+			c.Set("employeeID", uuidToString(employee.ID))
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Interviewer access required"})
+	}
+}
+
+func RequireCandidateReviewer(queries *QueriesAdapter) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		employeeIDStr, exists := c.Get("employeeID")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Employee ID not found in context"})
+			return
+		}
+
+		employeeID, err := parseUUID(employeeIDStr.(string))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid employee ID"})
+			return
+		}
+
+		candidateIDStr := c.Param("id")
+		if candidateIDStr == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Candidate ID not found in URL"})
+			return
+		}
+
+		candidateID, err := parseUUID(candidateIDStr)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "Invalid candidate ID"})
+			return
+		}
+
+		ctx := c.Request.Context()
+
+		employee, err := queries.GetEmployee(ctx, employeeID)
+		if err == nil && employee.CanReviewResumes {
+			c.Next()
+			return
+		}
+
+		_, err = queries.IsCandidateReviewer(ctx, repository.IsCandidateReviewerParams{
+			CandidateID: candidateID,
+			ReviewerID:  employeeID,
+		})
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "You are not assigned to review this candidate"})
+			return
+		}
+
 		c.Next()
 	}
 }

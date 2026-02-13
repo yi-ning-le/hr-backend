@@ -36,6 +36,15 @@ type CandidateComment struct {
 	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
+type CandidateReviewer struct {
+	ID          pgtype.UUID      `json:"id"`
+	CandidateID pgtype.UUID      `json:"candidate_id"`
+	ReviewerID  pgtype.UUID      `json:"reviewer_id"`
+	AssignedAt  pgtype.Timestamp `json:"assigned_at"`
+	RemovedAt   pgtype.Timestamp `json:"removed_at"`
+	CreatedAt   pgtype.Timestamp `json:"created_at"`
+}
+
 type CandidateStatus struct {
 	ID        pgtype.UUID        `json:"id"`
 	Name      string             `json:"name"`

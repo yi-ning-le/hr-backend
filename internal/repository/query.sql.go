@@ -133,6 +133,19 @@ func (q *Queries) CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID
 	return employee_id, err
 }
 
+const countCandidateReviewerAssignments = `-- name: CountCandidateReviewerAssignments :one
+
+SELECT COUNT(*) FROM candidate_reviewers WHERE reviewer_id = $1
+`
+
+// Candidate Reviewer queries
+func (q *Queries) CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error) {
+	row := q.db.QueryRow(ctx, countCandidateReviewerAssignments, reviewerID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countCandidates = `-- name: CountCandidates :one
 SELECT COUNT(*)
 FROM candidates c
@@ -871,6 +884,48 @@ func (q *Queries) GrantResumeReviewCapability(ctx context.Context, id pgtype.UUI
 	return err
 }
 
+const insertCandidateReviewer = `-- name: InsertCandidateReviewer :one
+INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
+VALUES ($1, $2)
+ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET assigned_at = CURRENT_TIMESTAMP, removed_at = NULL
+RETURNING id, candidate_id, reviewer_id, assigned_at, removed_at, created_at
+`
+
+type InsertCandidateReviewerParams struct {
+	CandidateID pgtype.UUID `json:"candidate_id"`
+	ReviewerID  pgtype.UUID `json:"reviewer_id"`
+}
+
+func (q *Queries) InsertCandidateReviewer(ctx context.Context, arg InsertCandidateReviewerParams) (CandidateReviewer, error) {
+	row := q.db.QueryRow(ctx, insertCandidateReviewer, arg.CandidateID, arg.ReviewerID)
+	var i CandidateReviewer
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.ReviewerID,
+		&i.AssignedAt,
+		&i.RemovedAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const isCandidateReviewer = `-- name: IsCandidateReviewer :one
+SELECT id FROM candidate_reviewers WHERE candidate_id = $1 AND reviewer_id = $2 LIMIT 1
+`
+
+type IsCandidateReviewerParams struct {
+	CandidateID pgtype.UUID `json:"candidate_id"`
+	ReviewerID  pgtype.UUID `json:"reviewer_id"`
+}
+
+func (q *Queries) IsCandidateReviewer(ctx context.Context, arg IsCandidateReviewerParams) (pgtype.UUID, error) {
+	row := q.db.QueryRow(ctx, isCandidateReviewer, arg.CandidateID, arg.ReviewerID)
+	var id pgtype.UUID
+	err := row.Scan(&id)
+	return id, err
+}
+
 const listCandidateComments = `-- name: ListCandidateComments :many
 SELECT 
     cc.id, cc.candidate_id, cc.author_id, cc.content, cc.created_at,
@@ -1277,6 +1332,79 @@ func (q *Queries) ListRecruiters(ctx context.Context) ([]ListRecruitersRow, erro
 	return items, nil
 }
 
+const listReviewedCandidates = `-- name: ListReviewedCandidates :many
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title, cr.assigned_at, cr.removed_at
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+ORDER BY cr.assigned_at DESC
+`
+
+type ListReviewedCandidatesRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	Name            string             `json:"name"`
+	Avatar          pgtype.Text        `json:"avatar"`
+	Email           string             `json:"email"`
+	Phone           string             `json:"phone"`
+	ExperienceYears int32              `json:"experience_years"`
+	Education       string             `json:"education"`
+	AppliedJobID    pgtype.UUID        `json:"applied_job_id"`
+	Channel         string             `json:"channel"`
+	ResumeUrl       string             `json:"resume_url"`
+	Status          string             `json:"status"`
+	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
+	ReviewStatus    pgtype.Text        `json:"review_status"`
+	ReviewNote      pgtype.Text        `json:"review_note"`
+	AppliedJobTitle string             `json:"applied_job_title"`
+	AssignedAt      pgtype.Timestamp   `json:"assigned_at"`
+	RemovedAt       pgtype.Timestamp   `json:"removed_at"`
+}
+
+func (q *Queries) ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listReviewedCandidates, reviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListReviewedCandidatesRow
+	for rows.Next() {
+		var i ListReviewedCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Avatar,
+			&i.Email,
+			&i.Phone,
+			&i.ExperienceYears,
+			&i.Education,
+			&i.AppliedJobID,
+			&i.Channel,
+			&i.ResumeUrl,
+			&i.Status,
+			&i.AppliedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReviewerID,
+			&i.ReviewStatus,
+			&i.ReviewNote,
+			&i.AppliedJobTitle,
+			&i.AssignedAt,
+			&i.RemovedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeHRRole = `-- name: RevokeHRRole :exec
 UPDATE employees
 SET employee_type = 'EMPLOYEE',
@@ -1498,6 +1626,17 @@ func (q *Queries) UpdateCandidateResume(ctx context.Context, arg UpdateCandidate
 		&i.ReviewNote,
 	)
 	return i, err
+}
+
+const updateCandidateReviewerRemovedAt = `-- name: UpdateCandidateReviewerRemovedAt :exec
+UPDATE candidate_reviewers
+SET removed_at = CURRENT_TIMESTAMP
+WHERE candidate_id = $1 AND removed_at IS NULL
+`
+
+func (q *Queries) UpdateCandidateReviewerRemovedAt(ctx context.Context, candidateID pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateCandidateReviewerRemovedAt, candidateID)
+	return err
 }
 
 const updateCandidateStatus = `-- name: UpdateCandidateStatus :one
