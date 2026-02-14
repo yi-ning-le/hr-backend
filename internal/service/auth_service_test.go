@@ -100,3 +100,238 @@ func TestAuthService_Register_RollsBackUserWhenEmployeeCreateFails(t *testing.T)
 	assert.Nil(t, user)
 	assert.True(t, deleteCalled, "DeleteUser should be called for rollback")
 }
+
+func TestAuthService_CleanupExpiredSessions(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	expiredCleanupCalled := false
+	mockRepo.DeleteExpiredSessionsFunc = func(ctx context.Context) error {
+		expiredCleanupCalled = true
+		return nil
+	}
+	inactiveCleanupCalled := false
+	mockRepo.DeleteInactiveSessionsFunc = func(ctx context.Context, lastActiveAt pgtype.Timestamptz) error {
+		inactiveCleanupCalled = true
+		assert.True(t, lastActiveAt.Valid)
+		return nil
+	}
+
+	err := service.CleanupExpiredSessions(context.Background())
+
+	assert.NoError(t, err)
+	assert.True(t, expiredCleanupCalled, "DeleteExpiredSessions should have been called")
+	assert.True(t, inactiveCleanupCalled, "DeleteInactiveSessions should have been called")
+}
+
+func TestAuthService_RefreshToken_RejectsMismatchedUserAgent(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	sessionID := "11111111-1111-1111-1111-111111111111"
+	sessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
+		Valid: true,
+	}
+	userUUID := pgtype.UUID{
+		Bytes: [16]byte{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
+		Valid: true,
+	}
+
+	mockRepo.RefreshTokenFunc = func(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+		assert.Equal(t, sessionUUID, id)
+		return repository.Session{
+			ID:        sessionUUID,
+			UserID:    userUUID,
+			UserAgent: pgtype.Text{String: "expected-agent", Valid: true},
+			IsActive:  pgtype.Bool{Bool: true, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(1 * time.Hour), Valid: true},
+		}, nil
+	}
+
+	updateCalled := false
+	mockRepo.DeleteSessionFunc = func(ctx context.Context, id pgtype.UUID) error {
+		updateCalled = true
+		return nil
+	}
+	mockRepo.GetUserByIDFunc = func(ctx context.Context, id pgtype.UUID) (repository.User, error) {
+		t.Fatalf("GetUserByID should not be called on context mismatch")
+		return repository.User{}, nil
+	}
+
+	resp, err := service.RefreshToken(context.Background(), sessionID, "different-agent")
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, "session context mismatch", err.Error())
+	assert.False(t, updateCalled, "DeleteSession should not run on context mismatch")
+}
+
+func TestAuthService_RefreshToken_RejectsMissingUserAgent(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	sessionID := "11111111-1111-1111-1111-111111111111"
+	sessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
+		Valid: true,
+	}
+	userUUID := pgtype.UUID{
+		Bytes: [16]byte{0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22, 0x22},
+		Valid: true,
+	}
+
+	mockRepo.RefreshTokenFunc = func(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+		assert.Equal(t, sessionUUID, id)
+		return repository.Session{
+			ID:        sessionUUID,
+			UserID:    userUUID,
+			UserAgent: pgtype.Text{String: "bound-agent", Valid: true},
+			IsActive:  pgtype.Bool{Bool: true, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(1 * time.Hour), Valid: true},
+		}, nil
+	}
+
+	updateCalled := false
+	mockRepo.DeleteSessionFunc = func(ctx context.Context, id pgtype.UUID) error {
+		updateCalled = true
+		return nil
+	}
+	mockRepo.GetUserByIDFunc = func(ctx context.Context, id pgtype.UUID) (repository.User, error) {
+		t.Fatalf("GetUserByID should not be called when user agent is missing")
+		return repository.User{}, nil
+	}
+
+	resp, err := service.RefreshToken(context.Background(), sessionID, "")
+
+	assert.Error(t, err)
+	assert.Nil(t, resp)
+	assert.Equal(t, "session context mismatch", err.Error())
+	assert.False(t, updateCalled, "DeleteSession should not run when user agent is missing")
+}
+
+func TestAuthService_RefreshToken_Success(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	oldSessionID := "11111111-1111-1111-1111-111111111111"
+	oldSessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
+		Valid: true,
+	}
+	userUUID := pgtype.UUID{
+		Bytes: [16]byte{0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33, 0x33},
+		Valid: true,
+	}
+	newSessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99, 0x99},
+		Valid: true,
+	}
+
+	mockRepo.RefreshTokenFunc = func(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+		assert.Equal(t, oldSessionUUID, id)
+		return repository.Session{
+			ID:        oldSessionUUID,
+			UserID:    userUUID,
+			UserAgent: pgtype.Text{String: "same-agent", Valid: true},
+			IsActive:  pgtype.Bool{Bool: true, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(1 * time.Hour), Valid: true},
+		}, nil
+	}
+
+	deleteCalled := false
+	mockRepo.DeleteSessionFunc = func(ctx context.Context, id pgtype.UUID) error {
+		deleteCalled = true
+		assert.Equal(t, oldSessionUUID, id)
+		return nil
+	}
+
+	createCalled := false
+	mockRepo.CreateSessionFunc = func(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
+		createCalled = true
+		assert.Equal(t, userUUID, arg.UserID)
+		return repository.Session{
+			ID:     newSessionUUID,
+			UserID: userUUID,
+		}, nil
+	}
+
+	mockRepo.GetUserByIDFunc = func(ctx context.Context, id pgtype.UUID) (repository.User, error) {
+		assert.Equal(t, userUUID, id)
+		return repository.User{
+			ID:        userUUID,
+			Username:  "test-user",
+			Email:     "test@example.com",
+			CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			Avatar:    pgtype.Text{Valid: false},
+		}, nil
+	}
+
+	resp, err := service.RefreshToken(context.Background(), oldSessionID, "same-agent")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "99999999-9999-9999-9999-999999999999", resp.SessionID)
+	assert.NotEmpty(t, resp.Token)
+	assert.Equal(t, "test-user", resp.User.Username)
+	assert.True(t, deleteCalled, "DeleteSession should be called")
+	assert.True(t, createCalled, "CreateSession should be called")
+}
+
+func TestAuthService_RefreshToken_AllowsLegacySessionWithoutUserAgent(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	service := NewAuthService(mockRepo, "secret")
+
+	oldSessionID := "11111111-1111-1111-1111-111111111111"
+	oldSessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11, 0x11},
+		Valid: true,
+	}
+	userUUID := pgtype.UUID{
+		Bytes: [16]byte{0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44, 0x44},
+		Valid: true,
+	}
+	newSessionUUID := pgtype.UUID{
+		Bytes: [16]byte{0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55, 0x55},
+		Valid: true,
+	}
+
+	mockRepo.RefreshTokenFunc = func(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+		assert.Equal(t, oldSessionUUID, id)
+		return repository.Session{
+			ID:        oldSessionUUID,
+			UserID:    userUUID,
+			UserAgent: pgtype.Text{Valid: false},
+			IsActive:  pgtype.Bool{Bool: true, Valid: true},
+			ExpiresAt: pgtype.Timestamptz{Time: time.Now().Add(1 * time.Hour), Valid: true},
+		}, nil
+	}
+	mockRepo.DeleteSessionFunc = func(ctx context.Context, id pgtype.UUID) error {
+		assert.Equal(t, oldSessionUUID, id)
+		return nil
+	}
+	mockRepo.CreateSessionFunc = func(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error) {
+		assert.Equal(t, userUUID, arg.UserID)
+		assert.True(t, arg.UserAgent.Valid)
+		assert.Equal(t, "rotated-agent", arg.UserAgent.String)
+		return repository.Session{
+			ID:     newSessionUUID,
+			UserID: userUUID,
+		}, nil
+	}
+	mockRepo.GetUserByIDFunc = func(ctx context.Context, id pgtype.UUID) (repository.User, error) {
+		assert.Equal(t, userUUID, id)
+		return repository.User{
+			ID:        userUUID,
+			Username:  "legacy-user",
+			Email:     "legacy@example.com",
+			CreatedAt: pgtype.Timestamptz{Time: time.Now(), Valid: true},
+		}, nil
+	}
+
+	resp, err := service.RefreshToken(context.Background(), oldSessionID, "rotated-agent")
+
+	assert.NoError(t, err)
+	assert.NotNil(t, resp)
+	assert.Equal(t, "55555555-5555-5555-5555-555555555555", resp.SessionID)
+}

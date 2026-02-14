@@ -39,6 +39,8 @@ func AuthMiddleware(jwtSecret string, repo repository.Querier) gin.HandlerFunc {
 					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "Session expired or invalidated"})
 					return
 				}
+				// Best-effort activity update. Keep request lifecycle bounded.
+				_ = repo.UpdateSessionActivity(c.Request.Context(), sessionUUID)
 			}
 		}
 

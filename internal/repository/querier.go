@@ -44,6 +44,7 @@ type Querier interface {
 	DeleteCandidateStatus(ctx context.Context, id pgtype.UUID) error
 	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 	DeleteExpiredSessions(ctx context.Context) error
+	DeleteInactiveSessions(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
 	DeleteSession(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
@@ -76,6 +77,7 @@ type Querier interface {
 	ListJobs(ctx context.Context) ([]Job, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)
+	RefreshToken(ctx context.Context, id pgtype.UUID) (Session, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
 	RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
@@ -91,6 +93,8 @@ type Querier interface {
 	UpdateInterviewStatus(ctx context.Context, arg UpdateInterviewStatusParams) (Interview, error)
 	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
 	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)
+	UpdateSessionActivity(ctx context.Context, id pgtype.UUID) error
+	UpdateSessionExpiry(ctx context.Context, arg UpdateSessionExpiryParams) error
 }
 
 var _ Querier = (*Queries)(nil)

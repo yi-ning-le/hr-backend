@@ -307,6 +307,13 @@ INSERT INTO interviews (
 ) VALUES (
   $1, $2, $3, $4, $5, $6
 )
+ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
+DO UPDATE SET
+  interviewer_id = EXCLUDED.interviewer_id,
+  job_id = EXCLUDED.job_id,
+  scheduled_time = EXCLUDED.scheduled_time,
+  scheduled_end_time = EXCLUDED.scheduled_end_time,
+  updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
 -- name: GetInterview :one
@@ -458,3 +465,19 @@ DELETE FROM sessions WHERE id = $1;
 -- name: DeleteExpiredSessions :exec
 DELETE FROM sessions 
 WHERE expires_at IS NOT NULL AND expires_at < CURRENT_TIMESTAMP;
+
+-- name: RefreshToken :one
+SELECT * FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1;
+
+-- name: UpdateSessionExpiry :exec
+UPDATE sessions SET expires_at = $2 WHERE id = $1;
+
+-- name: UpdateSessionActivity :exec
+UPDATE sessions 
+SET last_active_at = CURRENT_TIMESTAMP 
+WHERE id = $1 
+AND (last_active_at IS NULL OR last_active_at < (CURRENT_TIMESTAMP - INTERVAL '5 minutes'));
+
+-- name: DeleteInactiveSessions :exec
+DELETE FROM sessions 
+WHERE last_active_at < $1;

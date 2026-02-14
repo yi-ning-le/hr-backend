@@ -98,6 +98,10 @@ type MockQuerier struct {
 	DeactivateUserSessionsFunc func(ctx context.Context, userID pgtype.UUID) error
 	DeleteExpiredSessionsFunc  func(ctx context.Context) error
 	DeleteSessionFunc          func(ctx context.Context, id pgtype.UUID) error
+	RefreshTokenFunc           func(ctx context.Context, id pgtype.UUID) (repository.Session, error)
+	UpdateSessionExpiryFunc    func(ctx context.Context, arg repository.UpdateSessionExpiryParams) error
+	UpdateSessionActivityFunc  func(ctx context.Context, id pgtype.UUID) error
+	DeleteInactiveSessionsFunc func(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -514,6 +518,34 @@ func (m *MockQuerier) DeleteExpiredSessions(ctx context.Context) error {
 func (m *MockQuerier) DeleteSession(ctx context.Context, id pgtype.UUID) error {
 	if m.DeleteSessionFunc != nil {
 		return m.DeleteSessionFunc(ctx, id)
+	}
+	return nil
+}
+
+func (m *MockQuerier) RefreshToken(ctx context.Context, id pgtype.UUID) (repository.Session, error) {
+	if m.RefreshTokenFunc != nil {
+		return m.RefreshTokenFunc(ctx, id)
+	}
+	return repository.Session{}, nil
+}
+
+func (m *MockQuerier) UpdateSessionExpiry(ctx context.Context, arg repository.UpdateSessionExpiryParams) error {
+	if m.UpdateSessionExpiryFunc != nil {
+		return m.UpdateSessionExpiryFunc(ctx, arg)
+	}
+	return nil
+}
+
+func (m *MockQuerier) UpdateSessionActivity(ctx context.Context, id pgtype.UUID) error {
+	if m.UpdateSessionActivityFunc != nil {
+		return m.UpdateSessionActivityFunc(ctx, id)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteInactiveSessions(ctx context.Context, lastActiveAt pgtype.Timestamptz) error {
+	if m.DeleteInactiveSessionsFunc != nil {
+		return m.DeleteInactiveSessionsFunc(ctx, lastActiveAt)
 	}
 	return nil
 }

@@ -86,6 +86,90 @@ func TestCreateInterview(t *testing.T) {
 	}
 }
 
+func TestCreateInterview_Reschedule(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateIDStr := "11111111-1111-1111-1111-111111111111"
+	interviewerIDStr := "22222222-2222-2222-2222-222222222222"
+	jobIDStr := "33333333-3333-3333-3333-333333333333"
+	existingInterviewID := pgtype.UUID{Valid: true}
+	baseTime := time.Date(2030, 1, 2, 15, 4, 5, 0, time.UTC)
+
+	callCount := 0
+	newScheduledTime := pgtype.Timestamptz{Time: baseTime.Add(48 * time.Hour), Valid: true}
+	newScheduledEndTime := pgtype.Timestamptz{Time: baseTime.Add(49 * time.Hour), Valid: true}
+
+	mockRepo := &mocks.MockQuerier{
+		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
+			callCount++
+			scheduledTime := arg.ScheduledTime
+			scheduledEndTime := arg.ScheduledEndTime
+			if callCount == 2 {
+				scheduledTime = newScheduledTime
+				scheduledEndTime = newScheduledEndTime
+			}
+			return repository.Interview{
+				ID:               existingInterviewID,
+				CandidateID:      arg.CandidateID,
+				InterviewerID:    arg.InterviewerID,
+				JobID:            arg.JobID,
+				ScheduledTime:    scheduledTime,
+				ScheduledEndTime: scheduledEndTime,
+				Status:           arg.Status,
+			}, nil
+		},
+		AssignInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) error {
+			return nil
+		},
+	}
+
+	h := handler.NewRecruitmentHandler(mockRepo)
+	r := gin.New()
+	r.POST("/recruitment/interviews", h.CreateInterview)
+
+	// First schedule
+	input := model.CreateInterviewInput{
+		CandidateID:      candidateIDStr,
+		InterviewerID:    interviewerIDStr,
+		JobID:            jobIDStr,
+		ScheduledTime:    baseTime.Add(24 * time.Hour),
+		ScheduledEndTime: baseTime.Add(25 * time.Hour),
+	}
+
+	body, _ := json.Marshal(input)
+	req, _ := http.NewRequest("POST", "/recruitment/interviews", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w1 := httptest.NewRecorder()
+	r.ServeHTTP(w1, req)
+
+	// Second schedule (reschedule)
+	input.ScheduledTime = baseTime.Add(48 * time.Hour)
+	input.ScheduledEndTime = baseTime.Add(49 * time.Hour)
+
+	body, _ = json.Marshal(input)
+	req, _ = http.NewRequest("POST", "/recruitment/interviews", bytes.NewBuffer(body))
+	req.Header.Set("Content-Type", "application/json")
+	w2 := httptest.NewRecorder()
+	r.ServeHTTP(w2, req)
+
+	if w2.Code != http.StatusCreated {
+		t.Errorf("expected 201, got %d", w2.Code)
+	}
+
+	if callCount != 2 {
+		t.Errorf("expected 2 calls to CreateInterview (INSERT + UPDATE), got %d", callCount)
+	}
+
+	var result model.Interview
+	if err := json.Unmarshal(w2.Body.Bytes(), &result); err != nil {
+		t.Fatalf("failed to unmarshal response: %v", err)
+	}
+
+	if !result.ScheduledTime.Equal(input.ScheduledTime) {
+		t.Errorf("expected updated time, got %v", result.ScheduledTime)
+	}
+}
+
 func TestCreateInterview_RejectsPastStartTime(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 

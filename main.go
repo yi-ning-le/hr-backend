@@ -1,8 +1,14 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"hr-backend/internal/config"
 	"hr-backend/internal/handler"
@@ -37,6 +43,12 @@ func main() {
 	candidateStatusService := service.NewCandidateStatusService(repo)
 	candidateCommentService := service.NewCandidateCommentService(repo)
 
+	// 4.1 Start Background Tasks
+	backgroundCtx, cancelBackground := context.WithCancel(context.Background())
+	defer cancelBackground()
+
+	go authService.StartCleanupTask(backgroundCtx)
+
 	// 5. Initialize Handlers
 	jobHandler := handler.NewJobHandler(jobService)
 	candidateHandler := handler.NewCandidateHandler(candidateService)
@@ -62,6 +74,7 @@ func main() {
 	{
 		auth.POST("/register", authHandler.Register)
 		auth.POST("/login", authHandler.Login)
+		auth.POST("/refresh-token", authHandler.RefreshToken)
 	}
 
 	// Protected Routes (API)
@@ -71,6 +84,7 @@ func main() {
 		// Auth Routes
 		api.GET("/auth/sessions", authHandler.ListSessions)
 		api.DELETE("/auth/sessions/:id", authHandler.DeleteSession)
+		api.GET("/auth/ping", authHandler.Ping)
 		api.POST("/auth/logout", authHandler.Logout)
 
 		// Job Routes
@@ -193,9 +207,39 @@ func main() {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})
 
-	// Start Server
-	log.Printf("Server starting on port %s", cfg.ServerPort)
-	if err := r.Run(":" + cfg.ServerPort); err != nil {
-		log.Fatalf("Server failed to start: %v", err)
+	srv := &http.Server{
+		Addr:              ":" + cfg.ServerPort,
+		Handler:           r,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	serverErr := make(chan error, 1)
+	go func() {
+		log.Printf("Server starting on port %s", cfg.ServerPort)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			serverErr <- err
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(quit)
+
+	select {
+	case err := <-serverErr:
+		log.Fatalf("Server failed to start: %v", err)
+	case sig := <-quit:
+		log.Printf("Received signal: %s", sig.String())
+	}
+
+	log.Println("Shutting down server...")
+	cancelBackground()
+
+	shutdownCtx, cancelShutdown := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancelShutdown()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("Server shutdown error: %v", err)
+	}
+
+	log.Println("Server exited")
 }

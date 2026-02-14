@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"log"
 	"net/http"
 
 	"hr-backend/internal/model"
@@ -73,6 +74,10 @@ func (h *AuthHandler) Logout(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully"})
 }
 
+func (h *AuthHandler) Ping(c *gin.Context) {
+	c.Status(http.StatusOK)
+}
+
 func (h *AuthHandler) ListSessions(c *gin.Context) {
 	userID, exists := c.Get("userID")
 	if !exists {
@@ -135,4 +140,24 @@ func (h *AuthHandler) DeleteSession(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Session deleted successfully"})
+}
+
+func (h *AuthHandler) RefreshToken(c *gin.Context) {
+	var input struct {
+		SessionID string `json:"sessionId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionId is required"})
+		return
+	}
+
+	userAgent := c.GetHeader("User-Agent")
+	response, err := h.service.RefreshToken(c.Request.Context(), input.SessionID, userAgent)
+	if err != nil {
+		log.Printf("refresh token failed: %v", err)
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid session"})
+		return
+	}
+
+	c.JSON(http.StatusOK, response)
 }

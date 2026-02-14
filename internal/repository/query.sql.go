@@ -428,6 +428,13 @@ INSERT INTO interviews (
 ) VALUES (
   $1, $2, $3, $4, $5, $6
 )
+ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
+DO UPDATE SET
+  interviewer_id = EXCLUDED.interviewer_id,
+  job_id = EXCLUDED.job_id,
+  scheduled_time = EXCLUDED.scheduled_time,
+  scheduled_end_time = EXCLUDED.scheduled_end_time,
+  updated_at = CURRENT_TIMESTAMP
 RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time
 `
 
@@ -517,7 +524,7 @@ INSERT INTO sessions (
 ) VALUES (
   $1, $2, $3, $4, $5
 )
-RETURNING id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active
+RETURNING id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at
 `
 
 type CreateSessionParams struct {
@@ -547,6 +554,7 @@ func (q *Queries) CreateSession(ctx context.Context, arg CreateSessionParams) (S
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.IsActive,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
@@ -656,6 +664,16 @@ func (q *Queries) DeleteExpiredSessions(ctx context.Context) error {
 	return err
 }
 
+const deleteInactiveSessions = `-- name: DeleteInactiveSessions :exec
+DELETE FROM sessions 
+WHERE last_active_at < $1
+`
+
+func (q *Queries) DeleteInactiveSessions(ctx context.Context, lastActiveAt pgtype.Timestamptz) error {
+	_, err := q.db.Exec(ctx, deleteInactiveSessions, lastActiveAt)
+	return err
+}
+
 const deleteJob = `-- name: DeleteJob :exec
 DELETE FROM jobs
 WHERE id = $1
@@ -697,7 +715,7 @@ func (q *Queries) GetActiveInterviewCount(ctx context.Context, interviewerID pgt
 }
 
 const getActiveSessionByID = `-- name: GetActiveSessionByID :one
-SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1
 `
 
 func (q *Queries) GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
@@ -712,6 +730,7 @@ func (q *Queries) GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (Ses
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.IsActive,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
@@ -962,7 +981,7 @@ func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
 }
 
 const getSessionByID = `-- name: GetSessionByID :one
-SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions WHERE id = $1 LIMIT 1
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error) {
@@ -977,6 +996,7 @@ func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, 
 		&i.CreatedAt,
 		&i.ExpiresAt,
 		&i.IsActive,
+		&i.LastActiveAt,
 	)
 	return i, err
 }
@@ -1022,7 +1042,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 }
 
 const getUserSessions = `-- name: GetUserSessions :many
-SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active FROM sessions 
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions 
 WHERE user_id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
 ORDER BY created_at DESC
 `
@@ -1045,6 +1065,7 @@ func (q *Queries) GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]Se
 			&i.CreatedAt,
 			&i.ExpiresAt,
 			&i.IsActive,
+			&i.LastActiveAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1606,6 +1627,27 @@ func (q *Queries) ListReviewedCandidates(ctx context.Context, reviewerID pgtype.
 	return items, nil
 }
 
+const refreshToken = `-- name: RefreshToken :one
+SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions WHERE id = $1 AND is_active = true AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP) LIMIT 1
+`
+
+func (q *Queries) RefreshToken(ctx context.Context, id pgtype.UUID) (Session, error) {
+	row := q.db.QueryRow(ctx, refreshToken, id)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.DeviceInfo,
+		&i.IpAddress,
+		&i.UserAgent,
+		&i.CreatedAt,
+		&i.ExpiresAt,
+		&i.IsActive,
+		&i.LastActiveAt,
+	)
+	return i, err
+}
+
 const revokeHRRole = `-- name: RevokeHRRole :exec
 UPDATE employees
 SET employee_type = 'EMPLOYEE',
@@ -2116,4 +2158,30 @@ func (q *Queries) UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams
 		&i.UpdatedAt,
 	)
 	return i, err
+}
+
+const updateSessionActivity = `-- name: UpdateSessionActivity :exec
+UPDATE sessions 
+SET last_active_at = CURRENT_TIMESTAMP 
+WHERE id = $1 
+AND (last_active_at IS NULL OR last_active_at < (CURRENT_TIMESTAMP - INTERVAL '5 minutes'))
+`
+
+func (q *Queries) UpdateSessionActivity(ctx context.Context, id pgtype.UUID) error {
+	_, err := q.db.Exec(ctx, updateSessionActivity, id)
+	return err
+}
+
+const updateSessionExpiry = `-- name: UpdateSessionExpiry :exec
+UPDATE sessions SET expires_at = $2 WHERE id = $1
+`
+
+type UpdateSessionExpiryParams struct {
+	ID        pgtype.UUID        `json:"id"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) UpdateSessionExpiry(ctx context.Context, arg UpdateSessionExpiryParams) error {
+	_, err := q.db.Exec(ctx, updateSessionExpiry, arg.ID, arg.ExpiresAt)
+	return err
 }
