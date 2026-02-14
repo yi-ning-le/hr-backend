@@ -132,15 +132,26 @@ type EmployeeListResult struct {
 }
 
 type Interview struct {
-	ID               string          `json:"id"`
-	CandidateID      string          `json:"candidateId"`
-	InterviewerID    string          `json:"interviewerId"`
-	JobID            string          `json:"jobId"`
-	ScheduledTime    time.Time       `json:"scheduledTime"`
-	ScheduledEndTime time.Time       `json:"scheduledEndTime"`
-	Status           string          `json:"status"`
-	CreatedAt        time.Time       `json:"createdAt"`
-	SnapshotStatus   *SnapshotStatus `json:"snapshotStatus,omitempty"`
+	ID                 string          `json:"id"`
+	CandidateID        string          `json:"candidateId"`
+	CandidateName      string          `json:"candidateName,omitempty"`
+	CandidateResumeURL string          `json:"candidateResumeUrl,omitempty"`
+	InterviewerID      string          `json:"interviewerId"`
+	InterviewerName    string          `json:"interviewerName,omitempty"`
+	JobID              string          `json:"jobId"`
+	JobTitle           string          `json:"jobTitle,omitempty"`
+	ScheduledTime      time.Time       `json:"scheduledTime"`
+	ScheduledEndTime   time.Time       `json:"scheduledEndTime"`
+	Status             string          `json:"status"`
+	CreatedAt          time.Time       `json:"createdAt"`
+	SnapshotStatus     *SnapshotStatus `json:"snapshotStatus,omitempty"`
+}
+
+type InterviewListResult struct {
+	Interviews []Interview `json:"interviews"`
+	Total      int64       `json:"total"`
+	Page       int         `json:"page"`
+	Limit      int         `json:"limit"`
 }
 
 type SnapshotStatus struct {

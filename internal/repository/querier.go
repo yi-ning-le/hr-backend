@@ -20,11 +20,13 @@ type Querier interface {
 	// Recruitment Role queries
 	CheckIsAdmin(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
+	CheckRecruiterOrAdmin(ctx context.Context, id pgtype.UUID) (pgtype.Bool, error)
 	CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
 	// Candidate Reviewer queries
 	CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
 	CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error)
 	CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error)
+	CountInterviews(ctx context.Context, arg CountInterviewsParams) (int64, error)
 	CreateCandidate(ctx context.Context, arg CreateCandidateParams) (Candidate, error)
 	// Candidate Comment queries
 	CreateCandidateComment(ctx context.Context, arg CreateCandidateCommentParams) (CandidateComment, error)
@@ -73,6 +75,7 @@ type Querier interface {
 	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)
 	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
 	ListHRs(ctx context.Context) ([]ListHRsRow, error)
+	ListInterviews(ctx context.Context, arg ListInterviewsParams) ([]ListInterviewsRow, error)
 	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
@@ -90,6 +93,7 @@ type Querier interface {
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)
 	UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error
 	UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) (Employee, error)
+	UpdateInterview(ctx context.Context, arg UpdateInterviewParams) (Interview, error)
 	UpdateInterviewStatus(ctx context.Context, arg UpdateInterviewStatusParams) (Interview, error)
 	UpdateJob(ctx context.Context, arg UpdateJobParams) (Job, error)
 	UpdateJobStatus(ctx context.Context, arg UpdateJobStatusParams) (Job, error)

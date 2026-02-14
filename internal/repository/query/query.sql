@@ -348,6 +348,51 @@ ORDER BY i.scheduled_time DESC;
 -- name: HasInterviewAssignments :one
 SELECT EXISTS(SELECT 1 FROM interviews WHERE interviewer_id = $1);
 
+-- name: ListInterviews :many
+SELECT 
+    i.*, 
+    c.name as candidate_name, 
+    c.resume_url as candidate_resume_url,
+    j.title as job_title,
+    e.first_name as interviewer_first_name, 
+    e.last_name as interviewer_last_name
+FROM interviews i
+JOIN candidates c ON i.candidate_id = c.id
+JOIN jobs j ON i.job_id = j.id
+JOIN employees e ON i.interviewer_id = e.id
+WHERE 
+    (sqlc.narg('start_time')::timestamptz IS NULL OR i.scheduled_time >= sqlc.narg('start_time'))
+    AND (sqlc.narg('end_time')::timestamptz IS NULL OR i.scheduled_time <= sqlc.narg('end_time'))
+    AND (sqlc.narg('statuses')::text[] IS NULL OR i.status = ANY(sqlc.narg('statuses')::text[]))
+ORDER BY i.scheduled_time DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountInterviews :one
+SELECT COUNT(*)
+FROM interviews i
+WHERE 
+    (sqlc.narg('start_time')::timestamptz IS NULL OR i.scheduled_time >= sqlc.narg('start_time'))
+    AND (sqlc.narg('end_time')::timestamptz IS NULL OR i.scheduled_time <= sqlc.narg('end_time'))
+    AND (sqlc.narg('statuses')::text[] IS NULL OR i.status = ANY(sqlc.narg('statuses')::text[]));
+
+-- name: CheckRecruiterOrAdmin :one
+SELECT EXISTS(
+    SELECT 1 FROM users u WHERE u.id = $1 AND u.is_admin = TRUE
+) OR EXISTS(
+    SELECT 1 FROM recruitment_roles rr
+    JOIN employees e ON rr.employee_id = e.id
+    WHERE e.user_id = $1 AND rr.role_type = 'RECRUITER'
+);
+
+-- name: UpdateInterview :one
+UPDATE interviews
+SET scheduled_time = $2,
+    scheduled_end_time = $3,
+    interviewer_id = $4,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING *;
+
 -- name: TransferInterview :one
 UPDATE interviews
 SET interviewer_id = $2,

@@ -1,9 +1,11 @@
 package handler
 
 import (
+	"strings"
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"hr-backend/internal/model"
@@ -377,6 +379,7 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 			ID:               uuidToString(interview.ID),
 			CandidateID:      uuidToString(interview.CandidateID),
 			InterviewerID:    uuidToString(interview.InterviewerID),
+			InterviewerName:  employee.FirstName + " " + employee.LastName,
 			JobID:            uuidToString(interview.JobID),
 			ScheduledTime:    interview.ScheduledTime.Time,
 			ScheduledEndTime: interview.ScheduledEndTime.Time,
@@ -558,6 +561,230 @@ func (h *RecruitmentHandler) UpdateInterviewStatus(c *gin.Context) {
 		snapshot = &model.SnapshotStatus{
 			Key:   interview.SnapshotStatusKey,
 			Label: interview.SnapshotStatusLabel,
+		}
+	}
+
+	c.JSON(http.StatusOK, model.Interview{
+		ID:               uuidToString(updatedInterview.ID),
+		CandidateID:      uuidToString(updatedInterview.CandidateID),
+		InterviewerID:    uuidToString(updatedInterview.InterviewerID),
+		JobID:            uuidToString(updatedInterview.JobID),
+		ScheduledTime:    updatedInterview.ScheduledTime.Time,
+		ScheduledEndTime: updatedInterview.ScheduledEndTime.Time,
+		Status:           updatedInterview.Status,
+		CreatedAt:        updatedInterview.CreatedAt.Time,
+		SnapshotStatus:   snapshot,
+	})
+}
+
+// GetAllInterviews lists all interviews (Recruiter/Admin only)
+func (h *RecruitmentHandler) GetAllInterviews(c *gin.Context) {
+	userIDStr, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userID, err := parseUUID(userIDStr.(string))
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid user ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	hasPermission, err := h.checkRecruiterOrAdmin(ctx, userID)
+	if err != nil {
+		// Log error internally if needed
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+		return
+	}
+	if !hasPermission {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	// Parse query params
+	pageStr := c.DefaultQuery("page", "1")
+	pageSizeStr := c.DefaultQuery("pageSize", "50")
+	startStr := c.Query("start")
+	endStr := c.Query("end")
+	statusesStr := c.Query("status") // Comma separated
+
+	page, _ := strconv.Atoi(pageStr)
+	if page < 1 {
+		page = 1
+	}
+	pageSize, _ := strconv.Atoi(pageSizeStr)
+	if pageSize < 1 {
+		pageSize = 50
+	}
+
+	limit := int32(pageSize)
+	offset := int32((page - 1) * pageSize)
+
+	var startTime, endTime pgtype.Timestamptz
+	if startStr != "" {
+		t, err := time.Parse(time.RFC3339, startStr)
+		if err == nil {
+			startTime = pgtype.Timestamptz{Time: t, Valid: true}
+		}
+	}
+	if endStr != "" {
+		t, err := time.Parse(time.RFC3339, endStr)
+		if err == nil {
+			endTime = pgtype.Timestamptz{Time: t, Valid: true}
+		}
+	}
+
+	var statuses []string
+	if statusesStr != "" {
+		statuses = strings.Split(statusesStr, ",")
+	}
+
+	// List interviews
+	params := repository.ListInterviewsParams{
+		Limit:     limit,
+		Offset:    offset,
+		StartTime: startTime,
+		EndTime:   endTime,
+		Statuses:  statuses,
+	}
+	interviews, err := h.queries.ListInterviews(ctx, params)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list interviews"})
+		return
+	}
+
+	// Get total count
+	countParams := repository.CountInterviewsParams{
+		StartTime: startTime,
+		EndTime:   endTime,
+		Statuses:  statuses,
+	}
+	total, err := h.queries.CountInterviews(ctx, countParams)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to count interviews"})
+		return
+	}
+
+	result := make([]model.Interview, len(interviews))
+	for i, interview := range interviews {
+		var snapshot *model.SnapshotStatus
+		if interview.SnapshotStatusKey != "" {
+			snapshot = &model.SnapshotStatus{
+				Key:   interview.SnapshotStatusKey,
+				Label: interview.SnapshotStatusLabel,
+			}
+		}
+
+		result[i] = model.Interview{
+			ID:                 uuidToString(interview.ID),
+			CandidateID:        uuidToString(interview.CandidateID),
+			CandidateName:      interview.CandidateName,
+			CandidateResumeURL: interview.CandidateResumeUrl,
+			InterviewerID:      uuidToString(interview.InterviewerID),
+			InterviewerName:    interview.InterviewerFirstName + " " + interview.InterviewerLastName,
+			JobID:              uuidToString(interview.JobID),
+			JobTitle:           interview.JobTitle,
+			ScheduledTime:      interview.ScheduledTime.Time,
+			ScheduledEndTime:   interview.ScheduledEndTime.Time,
+			Status:             interview.Status,
+			CreatedAt:          interview.CreatedAt.Time,
+			SnapshotStatus:     snapshot,
+		}
+	}
+
+	c.JSON(http.StatusOK, model.InterviewListResult{
+		Interviews: result,
+		Total:      total,
+		Page:       page,
+		Limit:      pageSize,
+	})
+}
+
+// checkRecruiterOrAdmin checks if the user is an admin or a recruiter
+func (h *RecruitmentHandler) checkRecruiterOrAdmin(ctx context.Context, userID pgtype.UUID) (bool, error) {
+	res, err := h.queries.CheckRecruiterOrAdmin(ctx, userID)
+	return res.Bool, err
+}
+
+// UpdateInterview updates interview details (Recruiter only)
+func (h *RecruitmentHandler) UpdateInterview(c *gin.Context) {
+	interviewIDStr := c.Param("id")
+	interviewID, err := parseUUID(interviewIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
+		return
+	}
+
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
+	var req struct {
+		InterviewerID    string    `json:"interviewerId" binding:"required"`
+		ScheduledTime    time.Time `json:"scheduledTime" binding:"required"`
+		ScheduledEndTime time.Time `json:"scheduledEndTime" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// Validate time
+	if validationErr := validateInterviewSchedule(req.ScheduledTime, req.ScheduledEndTime, time.Now()); validationErr != "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": validationErr})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// Check permissions
+	employee, err := h.queries.GetEmployeeByUserID(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Employee profile not found"})
+		return
+	}
+
+	recruiterID, err := h.queries.CheckRecruiterRole(ctx, employee.ID)
+	isRecruiter := err == nil && recruiterID.Valid
+
+	// Check Admin
+	isAdmin, _ := h.queries.CheckIsAdmin(ctx, userID)
+
+	if !isRecruiter && !isAdmin {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	interviewerUUID, err := parseUUID(req.InterviewerID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interviewer ID"})
+		return
+	}
+
+	updatedInterview, err := h.queries.UpdateInterview(ctx, repository.UpdateInterviewParams{
+		ID:               interviewID,
+		ScheduledTime:    pgtype.Timestamptz{Time: req.ScheduledTime, Valid: true},
+		ScheduledEndTime: pgtype.Timestamptz{Time: req.ScheduledEndTime, Valid: true},
+		InterviewerID:    interviewerUUID,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview"})
+		return
+	}
+
+	// Ensure the new interviewer has the role
+	_ = h.queries.AssignInterviewerRole(ctx, interviewerUUID)
+
+	var snapshot *model.SnapshotStatus
+	if updatedInterview.SnapshotStatusKey != "" {
+		snapshot = &model.SnapshotStatus{
+			Key:   updatedInterview.SnapshotStatusKey,
+			Label: updatedInterview.SnapshotStatusLabel,
 		}
 	}
 

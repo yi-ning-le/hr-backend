@@ -188,7 +188,9 @@ func main() {
 	recruiterApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	recruiterApi.Use(middleware.RequireRecruiter(repo))
 	{
+		recruiterApi.GET("/interviews", recruitmentHandler.GetAllInterviews)
 		recruiterApi.POST("/interviews", recruitmentHandler.CreateInterview)
+		recruiterApi.PUT("/interviews/:id", recruitmentHandler.UpdateInterview)
 		recruiterApi.POST("/interviews/:id/transfer", recruitmentHandler.TransferInterview)
 	}
 

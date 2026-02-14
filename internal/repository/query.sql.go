@@ -144,6 +144,23 @@ func (q *Queries) CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error) {
 	return is_hr, err
 }
 
+const checkRecruiterOrAdmin = `-- name: CheckRecruiterOrAdmin :one
+SELECT EXISTS(
+    SELECT 1 FROM users u WHERE u.id = $1 AND u.is_admin = TRUE
+) OR EXISTS(
+    SELECT 1 FROM recruitment_roles rr
+    JOIN employees e ON rr.employee_id = e.id
+    WHERE e.user_id = $1 AND rr.role_type = 'RECRUITER'
+)
+`
+
+func (q *Queries) CheckRecruiterOrAdmin(ctx context.Context, id pgtype.UUID) (pgtype.Bool, error) {
+	row := q.db.QueryRow(ctx, checkRecruiterOrAdmin, id)
+	var column_1 pgtype.Bool
+	err := row.Scan(&column_1)
+	return column_1, err
+}
+
 const checkRecruiterRole = `-- name: CheckRecruiterRole :one
 SELECT employee_id
 FROM recruitment_roles
@@ -224,6 +241,28 @@ type CountEmployeesParams struct {
 
 func (q *Queries) CountEmployees(ctx context.Context, arg CountEmployeesParams) (int64, error) {
 	row := q.db.QueryRow(ctx, countEmployees, arg.Status, arg.Department, arg.Search)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countInterviews = `-- name: CountInterviews :one
+SELECT COUNT(*)
+FROM interviews i
+WHERE 
+    ($1::timestamptz IS NULL OR i.scheduled_time >= $1)
+    AND ($2::timestamptz IS NULL OR i.scheduled_time <= $2)
+    AND ($3::text[] IS NULL OR i.status = ANY($3::text[]))
+`
+
+type CountInterviewsParams struct {
+	StartTime pgtype.Timestamptz `json:"start_time"`
+	EndTime   pgtype.Timestamptz `json:"end_time"`
+	Statuses  []string           `json:"statuses"`
+}
+
+func (q *Queries) CountInterviews(ctx context.Context, arg CountInterviewsParams) (int64, error) {
+	row := q.db.QueryRow(ctx, countInterviews, arg.StartTime, arg.EndTime, arg.Statuses)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -1483,6 +1522,98 @@ func (q *Queries) ListHRs(ctx context.Context) ([]ListHRsRow, error) {
 	return items, nil
 }
 
+const listInterviews = `-- name: ListInterviews :many
+SELECT 
+    i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label, 
+    c.name as candidate_name, 
+    c.resume_url as candidate_resume_url,
+    j.title as job_title,
+    e.first_name as interviewer_first_name, 
+    e.last_name as interviewer_last_name
+FROM interviews i
+JOIN candidates c ON i.candidate_id = c.id
+JOIN jobs j ON i.job_id = j.id
+JOIN employees e ON i.interviewer_id = e.id
+WHERE 
+    ($3::timestamptz IS NULL OR i.scheduled_time >= $3)
+    AND ($4::timestamptz IS NULL OR i.scheduled_time <= $4)
+    AND ($5::text[] IS NULL OR i.status = ANY($5::text[]))
+ORDER BY i.scheduled_time DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListInterviewsParams struct {
+	Limit     int32              `json:"limit"`
+	Offset    int32              `json:"offset"`
+	StartTime pgtype.Timestamptz `json:"start_time"`
+	EndTime   pgtype.Timestamptz `json:"end_time"`
+	Statuses  []string           `json:"statuses"`
+}
+
+type ListInterviewsRow struct {
+	ID                   pgtype.UUID        `json:"id"`
+	CandidateID          pgtype.UUID        `json:"candidate_id"`
+	InterviewerID        pgtype.UUID        `json:"interviewer_id"`
+	JobID                pgtype.UUID        `json:"job_id"`
+	ScheduledTime        pgtype.Timestamptz `json:"scheduled_time"`
+	Status               string             `json:"status"`
+	CreatedAt            pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt            pgtype.Timestamptz `json:"updated_at"`
+	ScheduledEndTime     pgtype.Timestamptz `json:"scheduled_end_time"`
+	CandidateStatusID    pgtype.UUID        `json:"candidate_status_id"`
+	SnapshotStatusKey    string             `json:"snapshot_status_key"`
+	SnapshotStatusLabel  string             `json:"snapshot_status_label"`
+	CandidateName        string             `json:"candidate_name"`
+	CandidateResumeUrl   string             `json:"candidate_resume_url"`
+	JobTitle             string             `json:"job_title"`
+	InterviewerFirstName string             `json:"interviewer_first_name"`
+	InterviewerLastName  string             `json:"interviewer_last_name"`
+}
+
+func (q *Queries) ListInterviews(ctx context.Context, arg ListInterviewsParams) ([]ListInterviewsRow, error) {
+	rows, err := q.db.Query(ctx, listInterviews,
+		arg.Limit,
+		arg.Offset,
+		arg.StartTime,
+		arg.EndTime,
+		arg.Statuses,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListInterviewsRow
+	for rows.Next() {
+		var i ListInterviewsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.CandidateID,
+			&i.InterviewerID,
+			&i.JobID,
+			&i.ScheduledTime,
+			&i.Status,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ScheduledEndTime,
+			&i.CandidateStatusID,
+			&i.SnapshotStatusKey,
+			&i.SnapshotStatusLabel,
+			&i.CandidateName,
+			&i.CandidateResumeUrl,
+			&i.JobTitle,
+			&i.InterviewerFirstName,
+			&i.InterviewerLastName,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listInterviewsByInterviewer = `-- name: ListInterviewsByInterviewer :many
 SELECT i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label
 FROM interviews i
@@ -2096,6 +2227,48 @@ func (q *Queries) UpdateEmployee(ctx context.Context, arg UpdateEmployeeParams) 
 		&i.UpdatedAt,
 		&i.EmployeeType,
 		&i.CanReviewResumes,
+	)
+	return i, err
+}
+
+const updateInterview = `-- name: UpdateInterview :one
+UPDATE interviews
+SET scheduled_time = $2,
+    scheduled_end_time = $3,
+    interviewer_id = $4,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label
+`
+
+type UpdateInterviewParams struct {
+	ID               pgtype.UUID        `json:"id"`
+	ScheduledTime    pgtype.Timestamptz `json:"scheduled_time"`
+	ScheduledEndTime pgtype.Timestamptz `json:"scheduled_end_time"`
+	InterviewerID    pgtype.UUID        `json:"interviewer_id"`
+}
+
+func (q *Queries) UpdateInterview(ctx context.Context, arg UpdateInterviewParams) (Interview, error) {
+	row := q.db.QueryRow(ctx, updateInterview,
+		arg.ID,
+		arg.ScheduledTime,
+		arg.ScheduledEndTime,
+		arg.InterviewerID,
+	)
+	var i Interview
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.InterviewerID,
+		&i.JobID,
+		&i.ScheduledTime,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.ScheduledEndTime,
+		&i.CandidateStatusID,
+		&i.SnapshotStatusKey,
+		&i.SnapshotStatusLabel,
 	)
 	return i, err
 }

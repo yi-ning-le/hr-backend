@@ -26,6 +26,7 @@ type MockQuerier struct {
 	DeleteCandidateFunc       func(ctx context.Context, id pgtype.UUID) error
 
 	CountCandidatesFunc         func(ctx context.Context, arg repository.CountCandidatesParams) (int64, error)
+	CountInterviewsFunc         func(ctx context.Context, arg repository.CountInterviewsParams) (int64, error)
 	GetCandidateCountsByJobFunc func(ctx context.Context) ([]repository.GetCandidateCountsByJobRow, error)
 
 	CreateUserFunc        func(ctx context.Context, arg repository.CreateUserParams) (repository.User, error)
@@ -54,10 +55,12 @@ type MockQuerier struct {
 	AssignRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	AssignInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	CheckIsAdminFunc                func(ctx context.Context, id pgtype.UUID) (bool, error)
-	CheckRecruiterRoleFunc          func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
-	CheckInterviewerRoleFunc        func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
-	GetActiveInterviewCountFunc     func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
-	GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
+				CheckRecruiterRoleFunc      func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+				CheckRecruiterOrAdminFunc   func(ctx context.Context, userID pgtype.UUID) (pgtype.Bool, error)
+				CheckInterviewerRoleFunc    func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+				GetActiveInterviewCountFunc func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
+				GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
+			
 	RevokeRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
@@ -65,8 +68,10 @@ type MockQuerier struct {
 	CreateInterviewFunc             func(ctx context.Context, arg repository.CreateInterviewParams) (repository.CreateInterviewRow, error)
 	GetInterviewFunc                func(ctx context.Context, id pgtype.UUID) (repository.Interview, error)
 	ListInterviewsByInterviewerFunc func(ctx context.Context, interviewerID pgtype.UUID) ([]repository.Interview, error)
+	ListInterviewsFunc              func(ctx context.Context, arg repository.ListInterviewsParams) ([]repository.ListInterviewsRow, error)
 	HasInterviewAssignmentsFunc     func(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	TransferInterviewFunc           func(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error)
+	UpdateInterviewFunc             func(ctx context.Context, arg repository.UpdateInterviewParams) (repository.Interview, error)
 	UpdateInterviewStatusFunc       func(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error)
 	UpdateInterviewNoteFunc         func(ctx context.Context, arg interface{}) (repository.Interview, error)
 
@@ -284,6 +289,14 @@ func (m *MockQuerier) CheckRecruiterRole(ctx context.Context, employeeID pgtype.
 	}
 	return pgtype.UUID{}, nil
 }
+
+func (m *MockQuerier) CheckRecruiterOrAdmin(ctx context.Context, userID pgtype.UUID) (pgtype.Bool, error) {
+	if m.CheckRecruiterOrAdminFunc != nil {
+		return m.CheckRecruiterOrAdminFunc(ctx, userID)
+	}
+	return pgtype.Bool{}, nil
+}
+
 func (m *MockQuerier) CheckInterviewerRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
 	if m.CheckInterviewerRoleFunc != nil {
 		return m.CheckInterviewerRoleFunc(ctx, employeeID)
@@ -548,4 +561,25 @@ func (m *MockQuerier) DeleteInactiveSessions(ctx context.Context, lastActiveAt p
 		return m.DeleteInactiveSessionsFunc(ctx, lastActiveAt)
 	}
 	return nil
+}
+
+func (m *MockQuerier) CountInterviews(ctx context.Context, arg repository.CountInterviewsParams) (int64, error) {
+	if m.CountInterviewsFunc != nil {
+		return m.CountInterviewsFunc(ctx, arg)
+	}
+	return 0, nil
+}
+
+func (m *MockQuerier) ListInterviews(ctx context.Context, arg repository.ListInterviewsParams) ([]repository.ListInterviewsRow, error) {
+	if m.ListInterviewsFunc != nil {
+		return m.ListInterviewsFunc(ctx, arg)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) UpdateInterview(ctx context.Context, arg repository.UpdateInterviewParams) (repository.Interview, error) {
+	if m.UpdateInterviewFunc != nil {
+		return m.UpdateInterviewFunc(ctx, arg)
+	}
+	return repository.Interview{}, nil
 }
