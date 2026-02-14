@@ -55,12 +55,12 @@ type MockQuerier struct {
 	AssignRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	AssignInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	CheckIsAdminFunc                func(ctx context.Context, id pgtype.UUID) (bool, error)
-				CheckRecruiterRoleFunc      func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
-				CheckRecruiterOrAdminFunc   func(ctx context.Context, userID pgtype.UUID) (pgtype.Bool, error)
-				CheckInterviewerRoleFunc    func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
-				GetActiveInterviewCountFunc func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
-				GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
-			
+	CheckRecruiterRoleFunc          func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	CheckRecruiterOrAdminFunc       func(ctx context.Context, userID pgtype.UUID) (pgtype.Bool, error)
+	CheckInterviewerRoleFunc        func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	GetActiveInterviewCountFunc     func(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
+	GrantResumeReviewCapabilityFunc func(ctx context.Context, id pgtype.UUID) error
+
 	RevokeRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
