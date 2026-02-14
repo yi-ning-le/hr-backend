@@ -54,6 +54,7 @@ type CandidateStatus struct {
 	Color     string             `json:"color"`
 	CreatedAt pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt pgtype.Timestamptz `json:"updated_at"`
+	IsDeleted bool               `json:"is_deleted"`
 }
 
 type Employee struct {
@@ -79,16 +80,18 @@ type Employee struct {
 }
 
 type Interview struct {
-	ID                pgtype.UUID        `json:"id"`
-	CandidateID       pgtype.UUID        `json:"candidate_id"`
-	InterviewerID     pgtype.UUID        `json:"interviewer_id"`
-	JobID             pgtype.UUID        `json:"job_id"`
-	ScheduledTime     pgtype.Timestamptz `json:"scheduled_time"`
-	Status            string             `json:"status"`
-	CreatedAt         pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
-	ScheduledEndTime  pgtype.Timestamptz `json:"scheduled_end_time"`
-	CandidateStatusID pgtype.UUID        `json:"candidate_status_id"`
+	ID                  pgtype.UUID        `json:"id"`
+	CandidateID         pgtype.UUID        `json:"candidate_id"`
+	InterviewerID       pgtype.UUID        `json:"interviewer_id"`
+	JobID               pgtype.UUID        `json:"job_id"`
+	ScheduledTime       pgtype.Timestamptz `json:"scheduled_time"`
+	Status              string             `json:"status"`
+	CreatedAt           pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt           pgtype.Timestamptz `json:"updated_at"`
+	ScheduledEndTime    pgtype.Timestamptz `json:"scheduled_end_time"`
+	CandidateStatusID   pgtype.UUID        `json:"candidate_status_id"`
+	SnapshotStatusKey   string             `json:"snapshot_status_key"`
+	SnapshotStatusLabel string             `json:"snapshot_status_label"`
 }
 
 type Job struct {

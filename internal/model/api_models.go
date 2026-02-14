@@ -144,8 +144,8 @@ type Interview struct {
 }
 
 type SnapshotStatus struct {
-	Name  string `json:"name"`
-	Color string `json:"color"`
+	Key   string `json:"key"`
+	Label string `json:"label"`
 }
 
 type CreateInterviewInput struct {

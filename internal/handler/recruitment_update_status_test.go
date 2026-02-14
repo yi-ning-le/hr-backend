@@ -48,9 +48,9 @@ func TestUpdateInterviewStatus(t *testing.T) {
 
 	// Mock repository behavior
 	mockRepo := &mocks.MockQuerier{
-		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error) {
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
 			// Retrieve the interview
-			return repository.GetInterviewRow{
+			return repository.Interview{
 				ID:            id,
 				InterviewerID: interviewerID,
 				Status:        "PENDING",

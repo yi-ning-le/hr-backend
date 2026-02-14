@@ -32,7 +32,7 @@ type Querier interface {
 	// Employee queries
 	CreateEmployee(ctx context.Context, arg CreateEmployeeParams) (Employee, error)
 	// Interview queries
-	CreateInterview(ctx context.Context, arg CreateInterviewParams) (Interview, error)
+	CreateInterview(ctx context.Context, arg CreateInterviewParams) (CreateInterviewRow, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
 	// Session queries
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
@@ -57,7 +57,7 @@ type Querier interface {
 	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
 	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
 	GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error)
-	GetInterview(ctx context.Context, id pgtype.UUID) (GetInterviewRow, error)
+	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -73,7 +73,7 @@ type Querier interface {
 	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)
 	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
 	ListHRs(ctx context.Context) ([]ListHRsRow, error)
-	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]ListInterviewsByInterviewerRow, error)
+	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)

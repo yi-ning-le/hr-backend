@@ -62,9 +62,9 @@ type MockQuerier struct {
 	RevokeInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
 	GetEmployeeByUserIDFunc         func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error)
-	CreateInterviewFunc             func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error)
-	GetInterviewFunc                func(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error)
-	ListInterviewsByInterviewerFunc func(ctx context.Context, interviewerID pgtype.UUID) ([]repository.ListInterviewsByInterviewerRow, error)
+	CreateInterviewFunc             func(ctx context.Context, arg repository.CreateInterviewParams) (repository.CreateInterviewRow, error)
+	GetInterviewFunc                func(ctx context.Context, id pgtype.UUID) (repository.Interview, error)
+	ListInterviewsByInterviewerFunc func(ctx context.Context, interviewerID pgtype.UUID) ([]repository.Interview, error)
 	HasInterviewAssignmentsFunc     func(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	TransferInterviewFunc           func(ctx context.Context, arg repository.TransferInterviewParams) (repository.Interview, error)
 	UpdateInterviewStatusFunc       func(ctx context.Context, arg repository.UpdateInterviewStatusParams) (repository.Interview, error)
@@ -332,19 +332,19 @@ func (m *MockQuerier) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUI
 	}
 	return repository.Employee{}, nil
 }
-func (m *MockQuerier) CreateInterview(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
+func (m *MockQuerier) CreateInterview(ctx context.Context, arg repository.CreateInterviewParams) (repository.CreateInterviewRow, error) {
 	if m.CreateInterviewFunc != nil {
 		return m.CreateInterviewFunc(ctx, arg)
 	}
-	return repository.Interview{}, nil
+	return repository.CreateInterviewRow{}, nil
 }
-func (m *MockQuerier) GetInterview(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error) {
+func (m *MockQuerier) GetInterview(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
 	if m.GetInterviewFunc != nil {
 		return m.GetInterviewFunc(ctx, id)
 	}
-	return repository.GetInterviewRow{}, nil
+	return repository.Interview{}, nil
 }
-func (m *MockQuerier) ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]repository.ListInterviewsByInterviewerRow, error) {
+func (m *MockQuerier) ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]repository.Interview, error) {
 	if m.ListInterviewsByInterviewerFunc != nil {
 		return m.ListInterviewsByInterviewerFunc(ctx, interviewerID)
 	}

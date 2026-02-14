@@ -217,6 +217,7 @@ WHERE id = $1;
 
 -- name: ListCandidateStatuses :many
 SELECT * FROM candidate_statuses
+WHERE is_deleted = false
 ORDER BY sort_order ASC;
 
 -- name: GetCandidateStatus :one
@@ -250,7 +251,9 @@ SET sort_order = $2,
 WHERE id = $1;
 
 -- name: DeleteCandidateStatus :exec
-DELETE FROM candidate_statuses
+UPDATE candidate_statuses
+SET is_deleted = true,
+    updated_at = CURRENT_TIMESTAMP
 WHERE id = $1;
 
 -- Recruitment Role queries
@@ -302,31 +305,43 @@ SELECT * FROM employees WHERE user_id = $1 LIMIT 1;
 -- Interview queries
 
 -- name: CreateInterview :one
-INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id
-) VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+WITH current_candidate_status AS (
+    SELECT s.id, s.slug, s.name
+    FROM candidate_statuses s
+    JOIN candidates c ON c.status = s.slug
+    WHERE c.id = $1
+),
+inserted_interview AS (
+    INSERT INTO interviews (
+      candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id, snapshot_status_key, snapshot_status_label
+    ) VALUES (
+      $1, $2, $3, $4, $5, $6, 
+      (SELECT id FROM current_candidate_status),
+      (SELECT slug FROM current_candidate_status),
+      (SELECT name FROM current_candidate_status)
+    )
+    ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
+    DO UPDATE SET
+      interviewer_id = EXCLUDED.interviewer_id,
+      job_id = EXCLUDED.job_id,
+      scheduled_time = EXCLUDED.scheduled_time,
+      scheduled_end_time = EXCLUDED.scheduled_end_time,
+      candidate_status_id = EXCLUDED.candidate_status_id,
+      snapshot_status_key = EXCLUDED.snapshot_status_key,
+      snapshot_status_label = EXCLUDED.snapshot_status_label,
+      updated_at = CURRENT_TIMESTAMP
+    RETURNING *
 )
-ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
-DO UPDATE SET
-  interviewer_id = EXCLUDED.interviewer_id,
-  job_id = EXCLUDED.job_id,
-  scheduled_time = EXCLUDED.scheduled_time,
-  scheduled_end_time = EXCLUDED.scheduled_end_time,
-  candidate_status_id = EXCLUDED.candidate_status_id,
-  updated_at = CURRENT_TIMESTAMP
-RETURNING *;
+SELECT * FROM inserted_interview;
 
 -- name: GetInterview :one
-SELECT i.*, cs.name as candidate_status_name, cs.color as candidate_status_color
+SELECT i.*
 FROM interviews i
-LEFT JOIN candidate_statuses cs ON i.candidate_status_id = cs.id
 WHERE i.id = $1 LIMIT 1;
 
 -- name: ListInterviewsByInterviewer :many
-SELECT i.*, cs.name as candidate_status_name, cs.color as candidate_status_color
+SELECT i.*
 FROM interviews i
-LEFT JOIN candidate_statuses cs ON i.candidate_status_id = cs.id
 WHERE i.interviewer_id = $1
 ORDER BY i.scheduled_time DESC;
 

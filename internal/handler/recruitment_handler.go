@@ -297,30 +297,13 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 
 	ctx := c.Request.Context()
 
-	// 1. Get candidate to find current status
-	candidate, err := h.queries.GetCandidate(ctx, candidateID)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Candidate not found"})
-		return
-	}
-
-	// 2. Get status ID from slug
-	candidateStatus, err := h.queries.GetCandidateStatusBySlug(ctx, candidate.Status)
-	if err != nil {
-		// Fallback or error? If status is invalid, maybe error.
-		// For now, let's log or return error.
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid candidate status configuration"})
-		return
-	}
-
 	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{
-		CandidateID:       candidateID,
-		InterviewerID:     interviewerID,
-		JobID:             jobID,
-		ScheduledTime:     pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
-		ScheduledEndTime:  pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
-		Status:            "PENDING",
-		CandidateStatusID: candidateStatus.ID,
+		ID:               candidateID,
+		InterviewerID:    interviewerID,
+		JobID:            jobID,
+		ScheduledTime:    pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
+		ScheduledEndTime: pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
+		Status:           "PENDING",
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
@@ -328,6 +311,14 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 	}
 
 	_ = h.queries.AssignInterviewerRole(ctx, interviewerID)
+
+	var snapshot *model.SnapshotStatus
+	if interview.SnapshotStatusKey != "" {
+		snapshot = &model.SnapshotStatus{
+			Key:   interview.SnapshotStatusKey,
+			Label: interview.SnapshotStatusLabel,
+		}
+	}
 
 	c.JSON(http.StatusCreated, model.Interview{
 		ID:               uuidToString(interview.ID),
@@ -338,11 +329,7 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		ScheduledEndTime: interview.ScheduledEndTime.Time,
 		Status:           interview.Status,
 		CreatedAt:        interview.CreatedAt.Time,
-		// We can populate SnapshotStatus here since we just fetched it
-		SnapshotStatus: &model.SnapshotStatus{
-			Name:  candidateStatus.Name,
-			Color: candidateStatus.Color,
-		},
+		SnapshotStatus:   snapshot,
 	})
 }
 
@@ -379,10 +366,10 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 	result := make([]model.Interview, len(interviews))
 	for i, interview := range interviews {
 		var snapshot *model.SnapshotStatus
-		if interview.CandidateStatusName.Valid {
+		if interview.SnapshotStatusKey != "" {
 			snapshot = &model.SnapshotStatus{
-				Name:  interview.CandidateStatusName.String,
-				Color: interview.CandidateStatusColor.String,
+				Key:   interview.SnapshotStatusKey,
+				Label: interview.SnapshotStatusLabel,
 			}
 		}
 
@@ -434,10 +421,10 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 	}
 
 	var snapshot *model.SnapshotStatus
-	if interview.CandidateStatusName.Valid {
+	if interview.SnapshotStatusKey != "" {
 		snapshot = &model.SnapshotStatus{
-			Name:  interview.CandidateStatusName.String,
-			Color: interview.CandidateStatusColor.String,
+			Key:   interview.SnapshotStatusKey,
+			Label: interview.SnapshotStatusLabel,
 		}
 	}
 
@@ -567,10 +554,10 @@ func (h *RecruitmentHandler) UpdateInterviewStatus(c *gin.Context) {
 	}
 
 	var snapshot *model.SnapshotStatus
-	if interview.CandidateStatusName.Valid {
+	if interview.SnapshotStatusKey != "" {
 		snapshot = &model.SnapshotStatus{
-			Name:  interview.CandidateStatusName.String,
-			Color: interview.CandidateStatusColor.String,
+			Key:   interview.SnapshotStatusKey,
+			Label: interview.SnapshotStatusLabel,
 		}
 	}
 
