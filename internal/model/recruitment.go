@@ -23,6 +23,11 @@ type TransferInterviewInput struct {
 	NewInterviewerID string `json:"newInterviewerId" binding:"required"`
 }
 
+// UpdateInterviewStatusInput is the request body for updating interview status
+type UpdateInterviewStatusInput struct {
+	Status string `json:"status" binding:"required,oneof=COMPLETED CANCELLED"`
+}
+
 // HREmployee represents an employee with HR role
 type HREmployee struct {
 	EmployeeID string `json:"employeeId"`

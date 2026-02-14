@@ -303,9 +303,9 @@ SELECT * FROM employees WHERE user_id = $1 LIMIT 1;
 
 -- name: CreateInterview :one
 INSERT INTO interviews (
-  candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status
+  candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id
 ) VALUES (
-  $1, $2, $3, $4, $5, $6
+  $1, $2, $3, $4, $5, $6, $7
 )
 ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
 DO UPDATE SET
@@ -313,16 +313,22 @@ DO UPDATE SET
   job_id = EXCLUDED.job_id,
   scheduled_time = EXCLUDED.scheduled_time,
   scheduled_end_time = EXCLUDED.scheduled_end_time,
+  candidate_status_id = EXCLUDED.candidate_status_id,
   updated_at = CURRENT_TIMESTAMP
 RETURNING *;
 
 -- name: GetInterview :one
-SELECT * FROM interviews WHERE id = $1 LIMIT 1;
+SELECT i.*, cs.name as candidate_status_name, cs.color as candidate_status_color
+FROM interviews i
+LEFT JOIN candidate_statuses cs ON i.candidate_status_id = cs.id
+WHERE i.id = $1 LIMIT 1;
 
 -- name: ListInterviewsByInterviewer :many
-SELECT * FROM interviews
-WHERE interviewer_id = $1
-ORDER BY scheduled_time DESC;
+SELECT i.*, cs.name as candidate_status_name, cs.color as candidate_status_color
+FROM interviews i
+LEFT JOIN candidate_statuses cs ON i.candidate_status_id = cs.id
+WHERE i.interviewer_id = $1
+ORDER BY i.scheduled_time DESC;
 
 -- name: HasInterviewAssignments :one
 SELECT EXISTS(SELECT 1 FROM interviews WHERE interviewer_id = $1);

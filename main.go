@@ -200,6 +200,7 @@ func main() {
 	{
 		interviewApi.GET("/interviews/me", recruitmentHandler.GetMyInterviews)
 		interviewApi.GET("/interviews/:id", recruitmentHandler.GetInterview)
+		interviewApi.PATCH("/interviews/:id/status", recruitmentHandler.UpdateInterviewStatus)
 	}
 
 	// Health Check

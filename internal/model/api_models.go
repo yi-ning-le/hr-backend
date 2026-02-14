@@ -131,17 +131,21 @@ type EmployeeListResult struct {
 	Limit     int        `json:"limit"`
 }
 
-// --- Interview Models ---
-
 type Interview struct {
-	ID               string    `json:"id"`
-	CandidateID      string    `json:"candidateId"`
-	InterviewerID    string    `json:"interviewerId"`
-	JobID            string    `json:"jobId"`
-	ScheduledTime    time.Time `json:"scheduledTime"`
-	ScheduledEndTime time.Time `json:"scheduledEndTime"`
-	Status           string    `json:"status"`
-	CreatedAt        time.Time `json:"createdAt"`
+	ID               string          `json:"id"`
+	CandidateID      string          `json:"candidateId"`
+	InterviewerID    string          `json:"interviewerId"`
+	JobID            string          `json:"jobId"`
+	ScheduledTime    time.Time       `json:"scheduledTime"`
+	ScheduledEndTime time.Time       `json:"scheduledEndTime"`
+	Status           string          `json:"status"`
+	CreatedAt        time.Time       `json:"createdAt"`
+	SnapshotStatus   *SnapshotStatus `json:"snapshotStatus,omitempty"`
+}
+
+type SnapshotStatus struct {
+	Name  string `json:"name"`
+	Color string `json:"color"`
 }
 
 type CreateInterviewInput struct {

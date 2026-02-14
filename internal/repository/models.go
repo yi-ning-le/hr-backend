@@ -79,15 +79,16 @@ type Employee struct {
 }
 
 type Interview struct {
-	ID               pgtype.UUID        `json:"id"`
-	CandidateID      pgtype.UUID        `json:"candidate_id"`
-	InterviewerID    pgtype.UUID        `json:"interviewer_id"`
-	JobID            pgtype.UUID        `json:"job_id"`
-	ScheduledTime    pgtype.Timestamptz `json:"scheduled_time"`
-	Status           string             `json:"status"`
-	CreatedAt        pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt        pgtype.Timestamptz `json:"updated_at"`
-	ScheduledEndTime pgtype.Timestamptz `json:"scheduled_end_time"`
+	ID                pgtype.UUID        `json:"id"`
+	CandidateID       pgtype.UUID        `json:"candidate_id"`
+	InterviewerID     pgtype.UUID        `json:"interviewer_id"`
+	JobID             pgtype.UUID        `json:"job_id"`
+	ScheduledTime     pgtype.Timestamptz `json:"scheduled_time"`
+	Status            string             `json:"status"`
+	CreatedAt         pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt         pgtype.Timestamptz `json:"updated_at"`
+	ScheduledEndTime  pgtype.Timestamptz `json:"scheduled_end_time"`
+	CandidateStatusID pgtype.UUID        `json:"candidate_status_id"`
 }
 
 type Job struct {

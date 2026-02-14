@@ -51,6 +51,20 @@ func TestCreateInterview(t *testing.T) {
 				UpdatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			}, nil
 		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:     id,
+				Status: "screening",
+			}, nil
+		},
+		GetCandidateStatusBySlugFunc: func(ctx context.Context, slug string) (repository.CandidateStatus, error) {
+			return repository.CandidateStatus{
+				ID:    pgtype.UUID{Valid: true},
+				Name:  "Screening",
+				Slug:  slug,
+				Color: "#000000",
+			}, nil
+		},
 	}
 
 	h := handler.NewRecruitmentHandler(mockRepo)
@@ -118,6 +132,20 @@ func TestCreateInterview_Reschedule(t *testing.T) {
 				Status:           arg.Status,
 			}, nil
 		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:     id,
+				Status: "screening",
+			}, nil
+		},
+		GetCandidateStatusBySlugFunc: func(ctx context.Context, slug string) (repository.CandidateStatus, error) {
+			return repository.CandidateStatus{
+				ID:    pgtype.UUID{Valid: true},
+				Name:  "Screening",
+				Slug:  slug,
+				Color: "#000000",
+			}, nil
+		},
 		AssignInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) error {
 			return nil
 		},
@@ -183,6 +211,20 @@ func TestCreateInterview_RejectsPastStartTime(t *testing.T) {
 			createCalled = true
 			return repository.Interview{}, nil
 		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:     id,
+				Status: "screening",
+			}, nil
+		},
+		GetCandidateStatusBySlugFunc: func(ctx context.Context, slug string) (repository.CandidateStatus, error) {
+			return repository.CandidateStatus{
+				ID:    pgtype.UUID{Valid: true},
+				Name:  "Screening",
+				Slug:  slug,
+				Color: "#000000",
+			}, nil
+		},
 	}
 
 	h := handler.NewRecruitmentHandler(mockRepo)
@@ -224,6 +266,20 @@ func TestCreateInterview_RejectsInvalidTimeRange(t *testing.T) {
 		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.Interview, error) {
 			createCalled = true
 			return repository.Interview{}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:     id,
+				Status: "screening",
+			}, nil
+		},
+		GetCandidateStatusBySlugFunc: func(ctx context.Context, slug string) (repository.CandidateStatus, error) {
+			return repository.CandidateStatus{
+				ID:    pgtype.UUID{Valid: true},
+				Name:  "Screening",
+				Slug:  slug,
+				Color: "#000000",
+			}, nil
 		},
 	}
 
@@ -274,11 +330,11 @@ func TestGetMyInterviews(t *testing.T) {
 		GetEmployeeByUserIDFunc: func(ctx context.Context, uid pgtype.UUID) (repository.Employee, error) {
 			return repository.Employee{ID: employeeID, UserID: userID}, nil
 		},
-		ListInterviewsByInterviewerFunc: func(ctx context.Context, eid pgtype.UUID) ([]repository.Interview, error) {
+		ListInterviewsByInterviewerFunc: func(ctx context.Context, eid pgtype.UUID) ([]repository.ListInterviewsByInterviewerRow, error) {
 			if eid != employeeID {
 				return nil, nil
 			}
-			return []repository.Interview{
+			return []repository.ListInterviewsByInterviewerRow{
 				{
 					ID:            pgtype.UUID{Valid: true},
 					InterviewerID: employeeID,
@@ -341,11 +397,11 @@ func TestGetInterview(t *testing.T) {
 			}
 			return repository.Employee{ID: employeeID, UserID: userID}, nil
 		},
-		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error) {
 			if id != interviewID {
-				return repository.Interview{}, errors.New("not found")
+				return repository.GetInterviewRow{}, errors.New("not found")
 			}
-			return repository.Interview{
+			return repository.GetInterviewRow{
 				ID:            interviewID,
 				InterviewerID: employeeID,
 				Status:        "PENDING",
@@ -405,8 +461,8 @@ func TestGetInterview_ForbiddenForNonOwner(t *testing.T) {
 		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
 			return repository.Employee{ID: requesterEmployeeID, UserID: userID}, nil
 		},
-		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
-			return repository.Interview{
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error) {
+			return repository.GetInterviewRow{
 				ID:            interviewID,
 				InterviewerID: ownerEmployeeID,
 				Status:        "PENDING",
@@ -457,8 +513,8 @@ func TestGetInterview_AllowsRecruiterNonOwner(t *testing.T) {
 		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
 			return repository.Employee{ID: requesterEmployeeID, UserID: userID}, nil
 		},
-		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.Interview, error) {
-			return repository.Interview{
+		GetInterviewFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetInterviewRow, error) {
+			return repository.GetInterviewRow{
 				ID:            interviewID,
 				InterviewerID: ownerEmployeeID,
 				Status:        "PENDING",

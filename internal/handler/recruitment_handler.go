@@ -296,13 +296,31 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 	}
 
 	ctx := c.Request.Context()
+
+	// 1. Get candidate to find current status
+	candidate, err := h.queries.GetCandidate(ctx, candidateID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Candidate not found"})
+		return
+	}
+
+	// 2. Get status ID from slug
+	candidateStatus, err := h.queries.GetCandidateStatusBySlug(ctx, candidate.Status)
+	if err != nil {
+		// Fallback or error? If status is invalid, maybe error.
+		// For now, let's log or return error.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid candidate status configuration"})
+		return
+	}
+
 	interview, err := h.queries.CreateInterview(ctx, repository.CreateInterviewParams{
-		CandidateID:      candidateID,
-		InterviewerID:    interviewerID,
-		JobID:            jobID,
-		ScheduledTime:    pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
-		ScheduledEndTime: pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
-		Status:           "PENDING",
+		CandidateID:       candidateID,
+		InterviewerID:     interviewerID,
+		JobID:             jobID,
+		ScheduledTime:     pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
+		ScheduledEndTime:  pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
+		Status:            "PENDING",
+		CandidateStatusID: candidateStatus.ID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
@@ -320,6 +338,11 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		ScheduledEndTime: interview.ScheduledEndTime.Time,
 		Status:           interview.Status,
 		CreatedAt:        interview.CreatedAt.Time,
+		// We can populate SnapshotStatus here since we just fetched it
+		SnapshotStatus: &model.SnapshotStatus{
+			Name:  candidateStatus.Name,
+			Color: candidateStatus.Color,
+		},
 	})
 }
 
@@ -355,6 +378,14 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 
 	result := make([]model.Interview, len(interviews))
 	for i, interview := range interviews {
+		var snapshot *model.SnapshotStatus
+		if interview.CandidateStatusName.Valid {
+			snapshot = &model.SnapshotStatus{
+				Name:  interview.CandidateStatusName.String,
+				Color: interview.CandidateStatusColor.String,
+			}
+		}
+
 		result[i] = model.Interview{
 			ID:               uuidToString(interview.ID),
 			CandidateID:      uuidToString(interview.CandidateID),
@@ -364,6 +395,7 @@ func (h *RecruitmentHandler) GetMyInterviews(c *gin.Context) {
 			ScheduledEndTime: interview.ScheduledEndTime.Time,
 			Status:           interview.Status,
 			CreatedAt:        interview.CreatedAt.Time,
+			SnapshotStatus:   snapshot,
 		}
 	}
 
@@ -401,6 +433,14 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 		return
 	}
 
+	var snapshot *model.SnapshotStatus
+	if interview.CandidateStatusName.Valid {
+		snapshot = &model.SnapshotStatus{
+			Name:  interview.CandidateStatusName.String,
+			Color: interview.CandidateStatusColor.String,
+		}
+	}
+
 	c.JSON(http.StatusOK, model.Interview{
 		ID:               uuidToString(interview.ID),
 		CandidateID:      uuidToString(interview.CandidateID),
@@ -410,6 +450,7 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 		ScheduledEndTime: interview.ScheduledEndTime.Time,
 		Status:           interview.Status,
 		CreatedAt:        interview.CreatedAt.Time,
+		SnapshotStatus:   snapshot,
 	})
 }
 
@@ -472,4 +513,76 @@ func validateInterviewSchedule(scheduledTime, scheduledEndTime, now time.Time) s
 	}
 
 	return ""
+}
+
+// UpdateInterviewStatus updates the status of an interview
+func (h *RecruitmentHandler) UpdateInterviewStatus(c *gin.Context) {
+	interviewIDStr := c.Param("id")
+	interviewID, err := parseUUID(interviewIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
+		return
+	}
+
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
+	var input model.UpdateInterviewStatusInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	// 1. Get the interview to check permissions
+	interview, err := h.queries.GetInterview(ctx, interviewID)
+	if err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		return
+	}
+
+	// 2. Check permissions (Recruiter or Assigned Interviewer)
+	canAccess, err := h.canAccessInterviewByInterviewer(ctx, userID, interview.InterviewerID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify interview permission"})
+		return
+	}
+
+	if !canAccess {
+		c.JSON(http.StatusForbidden, gin.H{"error": "You do not have permission to update this interview"})
+		return
+	}
+
+	// 3. Update Status
+	updatedInterview, err := h.queries.UpdateInterviewStatus(ctx, repository.UpdateInterviewStatusParams{
+		ID:     interviewID,
+		Status: input.Status,
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview status"})
+		return
+	}
+
+	var snapshot *model.SnapshotStatus
+	if interview.CandidateStatusName.Valid {
+		snapshot = &model.SnapshotStatus{
+			Name:  interview.CandidateStatusName.String,
+			Color: interview.CandidateStatusColor.String,
+		}
+	}
+
+	c.JSON(http.StatusOK, model.Interview{
+		ID:               uuidToString(updatedInterview.ID),
+		CandidateID:      uuidToString(updatedInterview.CandidateID),
+		InterviewerID:    uuidToString(updatedInterview.InterviewerID),
+		JobID:            uuidToString(updatedInterview.JobID),
+		ScheduledTime:    updatedInterview.ScheduledTime.Time,
+		ScheduledEndTime: updatedInterview.ScheduledEndTime.Time,
+		Status:           updatedInterview.Status,
+		CreatedAt:        updatedInterview.CreatedAt.Time,
+		SnapshotStatus:   snapshot,
+	})
 }
