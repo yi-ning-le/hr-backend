@@ -70,9 +70,12 @@ type LoginInput struct {
 }
 
 type RegisterInput struct {
-	Username string `json:"username" binding:"required,min=3,max=20,alphanum"`
-	Email    string `json:"email" binding:"required,email"`
-	Password string `json:"password" binding:"required,min=6,max=50"`
+	Username  string `json:"username" binding:"required,min=3,max=20,alphanum"`
+	Email     string `json:"email" binding:"required,email"`
+	Password  string `json:"password" binding:"required,min=6,max=50"`
+	FirstName string `json:"firstName" binding:"required"`
+	LastName  string `json:"lastName" binding:"required"`
+	Phone     string `json:"phone" binding:"required"`
 }
 
 type User struct {

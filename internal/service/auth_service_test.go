@@ -19,9 +19,12 @@ func TestAuthService_Register(t *testing.T) {
 
 	ctx := context.Background()
 	input := model.RegisterInput{
-		Username: "testuser",
-		Email:    "test@example.com",
-		Password: "password123",
+		Username:  "testuser",
+		Email:     "test@example.com",
+		Password:  "password123",
+		FirstName: "Test",
+		LastName:  "User",
+		Phone:     "1234567890",
 	}
 
 	// Mock CreateUser
@@ -40,7 +43,9 @@ func TestAuthService_Register(t *testing.T) {
 	employeeCreated := false
 	mockRepo.CreateEmployeeFunc = func(ctx context.Context, arg repository.CreateEmployeeParams) (repository.Employee, error) {
 		employeeCreated = true
-		assert.Equal(t, input.Username, arg.FirstName)
+		assert.Equal(t, input.FirstName, arg.FirstName)
+		assert.Equal(t, input.LastName, arg.LastName)
+		assert.Equal(t, input.Phone, arg.Phone)
 		assert.Equal(t, "Unassigned", arg.Department)
 		assert.True(t, arg.UserID.Valid)
 		assert.Equal(t, [16]byte{1}, arg.UserID.Bytes)
@@ -68,9 +73,12 @@ func TestAuthService_Register_RollsBackUserWhenEmployeeCreateFails(t *testing.T)
 	service := NewAuthService(mockRepo, "secret")
 
 	input := model.RegisterInput{
-		Username: "rollback-user",
-		Email:    "rollback@example.com",
-		Password: "password123",
+		Username:  "rollback-user",
+		Email:     "rollback@example.com",
+		Password:  "password123",
+		FirstName: "Rollback",
+		LastName:  "User",
+		Phone:     "0000000000",
 	}
 
 	createdUserID := pgtype.UUID{Bytes: [16]byte{9}, Valid: true}

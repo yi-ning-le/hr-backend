@@ -57,18 +57,16 @@ func (s *AuthService) Register(ctx context.Context, input model.RegisterInput) (
 		Avatar:       pgtype.Text{Valid: false},
 	}
 
-	firstName := input.Username
-	lastName := "User"
 	now := pgtype.Timestamptz{
 		Time:  utils.Now(),
 		Valid: true,
 	}
 
 	empParams := repository.CreateEmployeeParams{
-		FirstName:      firstName,
-		LastName:       lastName,
+		FirstName:      input.FirstName,
+		LastName:       input.LastName,
 		Email:          input.Email,
-		Phone:          "",
+		Phone:          input.Phone,
 		Department:     "Unassigned",
 		Position:       "New Hire",
 		Status:         "Active",
