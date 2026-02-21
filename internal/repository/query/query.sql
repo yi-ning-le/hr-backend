@@ -161,11 +161,7 @@ INSERT INTO employees (
 )
 RETURNING *;
 
--- name: GrantResumeReviewCapability :exec
-UPDATE employees
-SET can_review_resumes = TRUE,
-    updated_at = CURRENT_TIMESTAMP
-WHERE id = $1;
+
 
 -- name: CheckIsHR :one
 SELECT employee_type = 'HR' as is_hr FROM employees WHERE id = $1 LIMIT 1;
@@ -297,6 +293,15 @@ JOIN employees e ON rr.employee_id = e.id
 JOIN users u ON e.user_id = u.id
 WHERE u.is_admin = false
   AND rr.role_type = 'RECRUITER'
+ORDER BY e.first_name;
+
+-- name: ListInterviewers :many
+SELECT e.id, e.first_name, e.last_name, e.department, e.phone
+FROM recruitment_roles rr
+JOIN employees e ON rr.employee_id = e.id
+JOIN users u ON e.user_id = u.id
+WHERE u.is_admin = false
+  AND rr.role_type = 'INTERVIEWER'
 ORDER BY e.first_name;
 
 -- name: GetEmployeeByUserID :one

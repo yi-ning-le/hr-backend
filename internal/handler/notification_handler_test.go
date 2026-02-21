@@ -98,7 +98,9 @@ func TestGetUnreadCount(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var result model.NotificationUnreadCount
+	var result struct {
+		Count int64 `json:"count"`
+	}
 	err := json.Unmarshal(w.Body.Bytes(), &result)
 	assert.NoError(t, err)
 	assert.Equal(t, int64(3), result.Count)

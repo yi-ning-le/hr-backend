@@ -108,6 +108,9 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		api.GET("/employees", employeeHandler.ListEmployees)
 		api.GET("/employees/:id", employeeHandler.GetEmployee)
 		api.GET("/recruitment/role", recruitmentHandler.GetMyRole)
+		api.GET("/recruitment/interviewers", recruitmentHandler.GetInterviewers)
+		api.GET("/recruitment/recruiters", recruitmentHandler.GetRecruiters)
+		api.GET("/recruitment/hrs", recruitmentHandler.GetHRs)
 		api.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment) // Uses service-level auth
 
 		// Notifications
@@ -176,12 +179,12 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 	adminApi.Use(middleware.AuthMiddleware(cfg.JWTSecret, repo))
 	adminApi.Use(middleware.RequireAdmin(repo))
 	{
-		adminApi.GET("/recruiters", recruitmentHandler.GetRecruiters)
 		adminApi.POST("/recruiters", recruitmentHandler.AssignRecruiter)
 		adminApi.DELETE("/recruiters", recruitmentHandler.RevokeRecruiter)
-		adminApi.GET("/hrs", recruitmentHandler.GetHRs)
 		adminApi.POST("/hrs", recruitmentHandler.AssignHR)
 		adminApi.DELETE("/hrs", recruitmentHandler.RevokeHR)
+		adminApi.POST("/interviewers", recruitmentHandler.AssignInterviewer)
+		adminApi.DELETE("/interviewers", recruitmentHandler.RevokeInterviewer)
 	}
 
 	// Interviewer Access

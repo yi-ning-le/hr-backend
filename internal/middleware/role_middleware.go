@@ -245,8 +245,9 @@ func RequireInterviewerOrRecruiter(queries *QueriesAdapter) gin.HandlerFunc {
 			return
 		}
 
-		// Backward compatibility: keep supporting explicit capability flags.
-		if employee.CanReviewResumes {
+		// Check if explicit interviewer
+		interviewerID, err := queries.q.CheckInterviewerRole(ctx, employee.ID)
+		if err == nil && interviewerID.Valid {
 			c.Set("employeeID", uuidToString(employee.ID))
 			c.Next()
 			return
@@ -302,8 +303,12 @@ func RequireCandidateReviewer(queries *QueriesAdapter) gin.HandlerFunc {
 
 		ctx := c.Request.Context()
 
-		employee, err := queries.GetEmployee(ctx, employeeID)
-		if err == nil && employee.CanReviewResumes {
+		// A user can review a candidate if:
+		// 1. They are a Recruiter (broad access)
+		// 2. They are explicitly assigned to review this specific candidate
+
+		recruiterID, err := queries.CheckRecruiterRole(ctx, employeeID)
+		if err == nil && recruiterID.Valid {
 			c.Next()
 			return
 		}

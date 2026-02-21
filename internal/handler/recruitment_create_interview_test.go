@@ -146,9 +146,6 @@ func TestCreateInterview_Reschedule(t *testing.T) {
 				Color: "#000000",
 			}, nil
 		},
-		AssignInterviewerRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) error {
-			return nil
-		},
 	}
 
 	h := handler.NewRecruitmentHandler(mockRepo)

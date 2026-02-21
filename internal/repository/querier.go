@@ -68,7 +68,6 @@ type Querier interface {
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]Session, error)
-	GrantResumeReviewCapability(ctx context.Context, id pgtype.UUID) error
 	HasInterviewAssignments(ctx context.Context, interviewerID pgtype.UUID) (bool, error)
 	InsertCandidateReviewer(ctx context.Context, arg InsertCandidateReviewerParams) (CandidateReviewer, error)
 	IsCandidateReviewer(ctx context.Context, arg IsCandidateReviewerParams) (pgtype.UUID, error)
@@ -78,6 +77,7 @@ type Querier interface {
 	ListCandidates(ctx context.Context, arg ListCandidatesParams) ([]ListCandidatesRow, error)
 	ListEmployees(ctx context.Context, arg ListEmployeesParams) ([]Employee, error)
 	ListHRs(ctx context.Context) ([]ListHRsRow, error)
+	ListInterviewers(ctx context.Context) ([]ListInterviewersRow, error)
 	ListInterviews(ctx context.Context, arg ListInterviewsParams) ([]ListInterviewsRow, error)
 	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)

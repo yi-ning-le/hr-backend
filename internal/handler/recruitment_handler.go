@@ -50,11 +50,10 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	if err != nil {
 		// User has no employee record.
 		c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
-			IsAdmin:          isAdmin,
-			IsRecruiter:      false,
-			IsInterviewer:    false,
-			IsHR:             false,
-			CanReviewResumes: false,
+			IsAdmin:       isAdmin,
+			IsRecruiter:   false,
+			IsInterviewer: false,
+			IsHR:          false,
 		})
 		return
 	}
@@ -63,26 +62,18 @@ func (h *RecruitmentHandler) GetMyRole(c *gin.Context) {
 	recruiterID, err := h.queries.CheckRecruiterRole(ctx, employee.ID)
 	isRecruiter := err == nil && recruiterID.Valid
 
-	canReviewResumes := employee.CanReviewResumes
-
-	reviewerCount, err := h.queries.CountCandidateReviewerAssignments(ctx, employee.ID)
-	if err == nil && reviewerCount > 0 {
-		canReviewResumes = true
-	}
+	// Check if interviewer
+	interviewerID, interviewerRoleErr := h.queries.CheckInterviewerRole(ctx, employee.ID)
+	isInterviewer := (interviewerRoleErr == nil && interviewerID.Valid)
 
 	// Check if HR
 	isHR := employee.EmployeeType == "HR"
 
-	activeInterviewCount, activeInterviewErr := h.queries.GetActiveInterviewCount(ctx, employee.ID)
-	interviewerID, interviewerRoleErr := h.queries.CheckInterviewerRole(ctx, employee.ID)
-	isInterviewer := (interviewerRoleErr == nil && interviewerID.Valid) || (activeInterviewErr == nil && activeInterviewCount > 0)
-
 	c.JSON(http.StatusOK, model.RecruitmentRoleResponse{
-		IsAdmin:          isAdmin,
-		IsRecruiter:      isRecruiter,
-		IsInterviewer:    isInterviewer,
-		IsHR:             isHR,
-		CanReviewResumes: canReviewResumes,
+		IsAdmin:       isAdmin,
+		IsRecruiter:   isRecruiter,
+		IsInterviewer: isInterviewer,
+		IsHR:          isHR,
 	})
 }
 
@@ -157,6 +148,79 @@ func (h *RecruitmentHandler) RevokeRecruiter(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Recruiter role revoked"})
+}
+
+// GetInterviewers lists all interviewers (Admin only)
+func (h *RecruitmentHandler) GetInterviewers(c *gin.Context) {
+	ctx := c.Request.Context()
+
+	interviewers, err := h.queries.ListInterviewers(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list interviewers"})
+		return
+	}
+
+	result := make([]model.Interviewer, len(interviewers))
+	for i, r := range interviewers {
+		result[i] = model.Interviewer{
+			EmployeeID: uuidToString(r.ID),
+			FirstName:  r.FirstName,
+			LastName:   r.LastName,
+			Department: r.Department,
+		}
+	}
+
+	c.JSON(http.StatusOK, result)
+}
+
+// AssignInterviewer assigns interviewer role to an employee (Admin only)
+func (h *RecruitmentHandler) AssignInterviewer(c *gin.Context) {
+	var input struct {
+		EmployeeID string `json:"employeeId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	employeeID, err := parseUUID(input.EmployeeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.queries.AssignInterviewerRole(ctx, employeeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to assign interviewer role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Interviewer role assigned"})
+}
+
+// RevokeInterviewer removes interviewer role from an employee (Admin only)
+func (h *RecruitmentHandler) RevokeInterviewer(c *gin.Context) {
+	var input struct {
+		EmployeeID string `json:"employeeId" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	employeeID, err := parseUUID(input.EmployeeID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid employee ID"})
+		return
+	}
+
+	ctx := c.Request.Context()
+	if err := h.queries.RevokeInterviewerRole(ctx, employeeID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to revoke interviewer role"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Interviewer role revoked"})
 }
 
 // GetHRs lists all HR employees (Admin only)
@@ -311,8 +375,6 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
 		return
 	}
-
-	_ = h.queries.AssignInterviewerRole(ctx, interviewerID)
 
 	var snapshot *model.SnapshotStatus
 	if interview.SnapshotStatusKey != "" {
@@ -776,9 +838,6 @@ func (h *RecruitmentHandler) UpdateInterview(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview"})
 		return
 	}
-
-	// Ensure the new interviewer has the role
-	_ = h.queries.AssignInterviewerRole(ctx, interviewerUUID)
 
 	var snapshot *model.SnapshotStatus
 	if updatedInterview.SnapshotStatusKey != "" {

@@ -2,10 +2,9 @@ package handler
 
 import (
 	"net/http"
-	"strconv"
 
-	"hr-backend/internal/model"
 	"hr-backend/internal/service"
+	"hr-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
 )
@@ -27,16 +26,7 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 		return
 	}
 
-	limitStr := c.Query("limit")
-	offsetStr := c.Query("offset")
-	var limit, offset int32 = 50, 0
-
-	if l, err := strconv.ParseInt(limitStr, 10, 32); err == nil && l > 0 {
-		limit = int32(l)
-	}
-	if o, err := strconv.ParseInt(offsetStr, 10, 32); err == nil {
-		offset = int32(o)
-	}
+	limit, offset := utils.ParseLimitOffset(c, 50, 0)
 
 	notifications, err := h.service.GetUserNotifications(c.Request.Context(), userID.(string), limit, offset)
 	if err != nil {
@@ -60,7 +50,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, model.NotificationUnreadCount{Count: count})
+	c.JSON(http.StatusOK, gin.H{"count": count})
 }
 
 // MarkAsRead godoc

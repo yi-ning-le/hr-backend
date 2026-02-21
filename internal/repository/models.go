@@ -75,8 +75,7 @@ type Employee struct {
 	CreatedAt      pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 	// HR, EMPLOYEE
-	EmployeeType     string `json:"employee_type"`
-	CanReviewResumes bool   `json:"can_review_resumes"`
+	EmployeeType string `json:"employee_type"`
 }
 
 type Interview struct {

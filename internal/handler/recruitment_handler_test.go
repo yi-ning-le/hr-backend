@@ -124,9 +124,8 @@ func TestGetMyRole_UsesExplicitReviewCapability(t *testing.T) {
 		},
 		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
 			return repository.Employee{
-				ID:               employeeIDUUID,
-				EmployeeType:     "HR",
-				CanReviewResumes: true,
+				ID:           employeeIDUUID,
+				EmployeeType: "HR",
 			}, nil
 		},
 		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {
@@ -164,9 +163,6 @@ func TestGetMyRole_UsesExplicitReviewCapability(t *testing.T) {
 
 	if !result.IsInterviewer {
 		t.Errorf("expected isInterviewer=true when explicit capability is enabled")
-	}
-	if !result.CanReviewResumes {
-		t.Errorf("expected canReviewResumes=true")
 	}
 	if !result.IsHR {
 		t.Errorf("expected isHR=true")
@@ -212,8 +208,8 @@ func TestGetMyRole_NoEmployeeDoesNotGrantReviewCapability(t *testing.T) {
 	if !result.IsAdmin {
 		t.Errorf("expected isAdmin=true")
 	}
-	if result.CanReviewResumes {
-		t.Errorf("expected canReviewResumes=false for admin without employee profile")
+	if !result.IsAdmin {
+		t.Errorf("expected isAdmin=true")
 	}
 }
 
@@ -233,9 +229,8 @@ func TestGetMyRole_DoesNotMutateInterviewerRole(t *testing.T) {
 		},
 		GetEmployeeByUserIDFunc: func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error) {
 			return repository.Employee{
-				ID:               employeeIDUUID,
-				EmployeeType:     "EMPLOYEE",
-				CanReviewResumes: false,
+				ID:           employeeIDUUID,
+				EmployeeType: "EMPLOYEE",
 			}, nil
 		},
 		CheckRecruiterRoleFunc: func(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error) {

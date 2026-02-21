@@ -64,6 +64,7 @@ type MockQuerier struct {
 	RevokeRecruiterRoleFunc         func(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeInterviewerRoleFunc       func(ctx context.Context, employeeID pgtype.UUID) error
 	ListRecruitersFunc              func(ctx context.Context) ([]repository.ListRecruitersRow, error)
+	ListInterviewersFunc            func(ctx context.Context) ([]repository.ListInterviewersRow, error)
 	GetEmployeeByUserIDFunc         func(ctx context.Context, userID pgtype.UUID) (repository.Employee, error)
 	CreateInterviewFunc             func(ctx context.Context, arg repository.CreateInterviewParams) (repository.CreateInterviewRow, error)
 	GetInterviewFunc                func(ctx context.Context, id pgtype.UUID) (repository.Interview, error)
@@ -343,6 +344,12 @@ func (m *MockQuerier) RevokeInterviewerRole(ctx context.Context, employeeID pgty
 func (m *MockQuerier) ListRecruiters(ctx context.Context) ([]repository.ListRecruitersRow, error) {
 	if m.ListRecruitersFunc != nil {
 		return m.ListRecruitersFunc(ctx)
+	}
+	return nil, nil
+}
+func (m *MockQuerier) ListInterviewers(ctx context.Context) ([]repository.ListInterviewersRow, error) {
+	if m.ListInterviewersFunc != nil {
+		return m.ListInterviewersFunc(ctx)
 	}
 	return nil, nil
 }
