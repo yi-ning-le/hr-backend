@@ -54,7 +54,7 @@ SET reviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title
 `
 
 type AssignReviewerParams struct {
@@ -79,7 +79,6 @@ type AssignReviewerRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
-	ReviewNote      pgtype.Text        `json:"review_note"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 }
 
@@ -103,7 +102,6 @@ func (q *Queries) AssignReviewer(ctx context.Context, arg AssignReviewerParams) 
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 		&i.AppliedJobTitle,
 	)
 	return i, err
@@ -274,7 +272,7 @@ INSERT INTO candidates (
 ) VALUES (
   $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 )
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status
 `
 
 type CreateCandidateParams struct {
@@ -323,7 +321,6 @@ func (q *Queries) CreateCandidate(ctx context.Context, arg CreateCandidateParams
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -810,7 +807,7 @@ func (q *Queries) GetActiveSessionByID(ctx context.Context, id pgtype.UUID) (Ses
 }
 
 const getCandidate = `-- name: GetCandidate :one
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE c.id = $1 LIMIT 1
@@ -833,7 +830,6 @@ type GetCandidateRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
-	ReviewNote      pgtype.Text        `json:"review_note"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 }
 
@@ -857,7 +853,6 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 		&i.AppliedJobTitle,
 	)
 	return i, err
@@ -1310,7 +1305,7 @@ func (q *Queries) ListCandidateStatuses(ctx context.Context) ([]CandidateStatus,
 }
 
 const listCandidates = `-- name: ListCandidates :many
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE ($3::uuid IS NULL OR c.applied_job_id = $3)
@@ -1352,7 +1347,6 @@ type ListCandidatesRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
-	ReviewNote      pgtype.Text        `json:"review_note"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 }
 
@@ -1390,7 +1384,6 @@ func (q *Queries) ListCandidates(ctx context.Context, arg ListCandidatesParams) 
 			&i.UpdatedAt,
 			&i.ReviewerID,
 			&i.ReviewStatus,
-			&i.ReviewNote,
 			&i.AppliedJobTitle,
 		); err != nil {
 			return nil, err
@@ -1763,7 +1756,7 @@ func (q *Queries) ListRecruiters(ctx context.Context) ([]ListRecruitersRow, erro
 }
 
 const listReviewedCandidates = `-- name: ListReviewedCandidates :many
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title, cr.assigned_at, cr.removed_at
+SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title, cr.assigned_at, cr.removed_at
 FROM candidate_reviewers cr
 JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
@@ -1788,7 +1781,6 @@ type ListReviewedCandidatesRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
-	ReviewNote      pgtype.Text        `json:"review_note"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 	AssignedAt      pgtype.Timestamp   `json:"assigned_at"`
 	RemovedAt       pgtype.Timestamp   `json:"removed_at"`
@@ -1820,7 +1812,6 @@ func (q *Queries) ListReviewedCandidates(ctx context.Context, reviewerID pgtype.
 			&i.UpdatedAt,
 			&i.ReviewerID,
 			&i.ReviewStatus,
-			&i.ReviewNote,
 			&i.AppliedJobTitle,
 			&i.AssignedAt,
 			&i.RemovedAt,
@@ -1889,17 +1880,15 @@ func (q *Queries) RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUI
 const submitReview = `-- name: SubmitReview :one
 UPDATE candidates c
 SET review_status = $2,
-    review_note = $3,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title
 `
 
 type SubmitReviewParams struct {
 	ID           pgtype.UUID `json:"id"`
 	ReviewStatus pgtype.Text `json:"review_status"`
-	ReviewNote   pgtype.Text `json:"review_note"`
 }
 
 type SubmitReviewRow struct {
@@ -1919,12 +1908,11 @@ type SubmitReviewRow struct {
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
 	ReviewStatus    pgtype.Text        `json:"review_status"`
-	ReviewNote      pgtype.Text        `json:"review_note"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 }
 
 func (q *Queries) SubmitReview(ctx context.Context, arg SubmitReviewParams) (SubmitReviewRow, error) {
-	row := q.db.QueryRow(ctx, submitReview, arg.ID, arg.ReviewStatus, arg.ReviewNote)
+	row := q.db.QueryRow(ctx, submitReview, arg.ID, arg.ReviewStatus)
 	var i SubmitReviewRow
 	err := row.Scan(
 		&i.ID,
@@ -1943,7 +1931,6 @@ func (q *Queries) SubmitReview(ctx context.Context, arg SubmitReviewParams) (Sub
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 		&i.AppliedJobTitle,
 	)
 	return i, err
@@ -1997,7 +1984,7 @@ SET name = $2,
     applied_at = $12,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status
 `
 
 type UpdateCandidateParams struct {
@@ -2048,7 +2035,6 @@ func (q *Queries) UpdateCandidate(ctx context.Context, arg UpdateCandidateParams
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -2058,7 +2044,7 @@ UPDATE candidates
 SET resume_url = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status
 `
 
 type UpdateCandidateResumeParams struct {
@@ -2086,7 +2072,6 @@ func (q *Queries) UpdateCandidateResume(ctx context.Context, arg UpdateCandidate
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 	)
 	return i, err
 }
@@ -2107,7 +2092,7 @@ UPDATE candidates
 SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status, review_note
+RETURNING id, name, avatar, email, phone, experience_years, education, applied_job_id, channel, resume_url, status, applied_at, created_at, updated_at, reviewer_id, review_status
 `
 
 type UpdateCandidateStatusParams struct {
@@ -2135,7 +2120,6 @@ func (q *Queries) UpdateCandidateStatus(ctx context.Context, arg UpdateCandidate
 		&i.UpdatedAt,
 		&i.ReviewerID,
 		&i.ReviewStatus,
-		&i.ReviewNote,
 	)
 	return i, err
 }

@@ -178,7 +178,7 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 	return mapAssignReviewerRowToModel(row), nil
 }
 
-func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID string, status string, note string) (*model.Candidate, error) {
+func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID string, status string) (*model.Candidate, error) {
 	candidateID, err := utils.StringToUUID(id)
 	if err != nil {
 		return nil, err
@@ -212,7 +212,6 @@ func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID s
 	row, err := s.repo.SubmitReview(ctx, repository.SubmitReviewParams{
 		ID:           candidateID,
 		ReviewStatus: pgtype.Text{String: status, Valid: true},
-		ReviewNote:   pgtype.Text{String: note, Valid: true},
 	})
 	if err != nil {
 		return nil, err
@@ -247,7 +246,7 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		ReviewNote:      row.ReviewNote.String,
+		
 	}, nil
 }
 
@@ -347,7 +346,7 @@ func mapCandidateRowToModel(row repository.ListCandidatesRow) model.Candidate {
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		ReviewNote:      row.ReviewNote.String,
+		
 	}
 }
 
@@ -368,7 +367,7 @@ func mapAssignReviewerRowToModel(row repository.AssignReviewerRow) *model.Candid
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		ReviewNote:      row.ReviewNote.String,
+		
 	}
 }
 
@@ -389,6 +388,6 @@ func mapSubmitReviewRowToModel(row repository.SubmitReviewRow) *model.Candidate 
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		ReviewNote:      row.ReviewNote.String,
+		
 	}
 }

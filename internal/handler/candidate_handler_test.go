@@ -85,7 +85,6 @@ func TestSubmitReviewHandler_InvalidReviewStatus(t *testing.T) {
 
 	body, _ := json.Marshal(map[string]string{
 		"reviewStatus": "unexpected",
-		"reviewNote":   "test",
 	})
 	req, _ := http.NewRequest(
 		"POST",
@@ -136,9 +135,8 @@ func TestSubmitReviewHandler_NormalizesReviewStatus(t *testing.T) {
 				t.Errorf("expected normalized status suitable, got %s", arg.ReviewStatus.String)
 			}
 			return repository.SubmitReviewRow{
-				ID:              candidateID,
-				ReviewStatus:    pgtype.Text{String: arg.ReviewStatus.String, Valid: true},
-				ReviewNote:      arg.ReviewNote,
+				ID: candidateID,
+
 				AppliedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
 				AppliedJobTitle: "Software Engineer",
 				Name:            "Test Candidate",

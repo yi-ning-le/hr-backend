@@ -157,7 +157,7 @@ func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
 	}
 
 	svc := service.NewCandidateService(mockRepo)
-	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable", "note")
+	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable",)
 	if !errors.Is(err, service.ErrReviewPermissionDenied) {
 		t.Fatalf("expected ErrReviewPermissionDenied, got %v", err)
 	}
@@ -179,7 +179,7 @@ func TestSubmitReview_ReviewerProfileNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
-		"note",
+		
 	)
 
 	if !errors.Is(err, service.ErrReviewerProfileNotFound) {
@@ -208,7 +208,7 @@ func TestSubmitReview_CandidateNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
-		"note",
+		
 	)
 
 	if !errors.Is(err, service.ErrCandidateNotFound) {

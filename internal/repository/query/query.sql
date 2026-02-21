@@ -122,16 +122,15 @@ SET reviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title;
 
 -- name: SubmitReview :one
 UPDATE candidates c
 SET review_status = $2,
-    review_note = $3,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, c.review_note, j.title as applied_job_title;
+RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title;
 
 -- name: DeleteCandidate :exec
 DELETE FROM candidates

@@ -131,7 +131,6 @@ func (h *CandidateHandler) SubmitReview(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
 		ReviewStatus string `json:"reviewStatus" binding:"required"`
-		ReviewNote   string `json:"reviewNote"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -162,7 +161,6 @@ func (h *CandidateHandler) SubmitReview(c *gin.Context) {
 		id,
 		userIDStr,
 		reviewStatus,
-		req.ReviewNote,
 	)
 	if err != nil {
 		if errors.Is(err, service.ErrReviewPermissionDenied) {
