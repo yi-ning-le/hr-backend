@@ -107,6 +107,13 @@ type MockQuerier struct {
 	UpdateSessionExpiryFunc    func(ctx context.Context, arg repository.UpdateSessionExpiryParams) error
 	UpdateSessionActivityFunc  func(ctx context.Context, id pgtype.UUID) error
 	DeleteInactiveSessionsFunc func(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
+
+	// Notification mock functions
+	CreateNotificationFunc         func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error)
+	GetNotificationsByUserIdFunc   func(ctx context.Context, arg repository.GetNotificationsByUserIdParams) ([]repository.Notification, error)
+	GetUnreadNotificationCountFunc func(ctx context.Context, userID pgtype.UUID) (int64, error)
+	MarkAllNotificationsAsReadFunc func(ctx context.Context, userID pgtype.UUID) error
+	MarkNotificationAsReadFunc     func(ctx context.Context, arg repository.MarkNotificationAsReadParams) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -582,4 +589,40 @@ func (m *MockQuerier) UpdateInterview(ctx context.Context, arg repository.Update
 		return m.UpdateInterviewFunc(ctx, arg)
 	}
 	return repository.Interview{}, nil
+}
+
+// Notification methods
+func (m *MockQuerier) CreateNotification(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+	if m.CreateNotificationFunc != nil {
+		return m.CreateNotificationFunc(ctx, arg)
+	}
+	return repository.Notification{}, nil
+}
+
+func (m *MockQuerier) GetNotificationsByUserId(ctx context.Context, arg repository.GetNotificationsByUserIdParams) ([]repository.Notification, error) {
+	if m.GetNotificationsByUserIdFunc != nil {
+		return m.GetNotificationsByUserIdFunc(ctx, arg)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) GetUnreadNotificationCount(ctx context.Context, userID pgtype.UUID) (int64, error) {
+	if m.GetUnreadNotificationCountFunc != nil {
+		return m.GetUnreadNotificationCountFunc(ctx, userID)
+	}
+	return 0, nil
+}
+
+func (m *MockQuerier) MarkAllNotificationsAsRead(ctx context.Context, userID pgtype.UUID) error {
+	if m.MarkAllNotificationsAsReadFunc != nil {
+		return m.MarkAllNotificationsAsReadFunc(ctx, userID)
+	}
+	return nil
+}
+
+func (m *MockQuerier) MarkNotificationAsRead(ctx context.Context, arg repository.MarkNotificationAsReadParams) error {
+	if m.MarkNotificationAsReadFunc != nil {
+		return m.MarkNotificationAsReadFunc(ctx, arg)
+	}
+	return nil
 }

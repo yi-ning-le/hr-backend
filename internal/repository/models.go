@@ -107,6 +107,17 @@ type Job struct {
 	UpdatedAt      pgtype.Timestamptz `json:"updated_at"`
 }
 
+type Notification struct {
+	ID        pgtype.UUID        `json:"id"`
+	UserID    pgtype.UUID        `json:"user_id"`
+	Title     string             `json:"title"`
+	Message   string             `json:"message"`
+	Type      string             `json:"type"`
+	LinkUrl   pgtype.Text        `json:"link_url"`
+	IsRead    bool               `json:"is_read"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+}
+
 type RecruitmentRole struct {
 	EmployeeID pgtype.UUID        `json:"employee_id"`
 	RoleType   string             `json:"role_type"`

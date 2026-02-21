@@ -49,6 +49,8 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 	candidateStatusHandler := handler.NewCandidateStatusHandler(candidateStatusService)
 	recruitmentHandler := handler.NewRecruitmentHandler(repo)
 	candidateCommentHandler := handler.NewCandidateCommentHandler(candidateCommentService)
+	notificationService := service.NewNotificationService(repo)
+	notificationHandler := handler.NewNotificationHandler(notificationService)
 
 	// Background Context
 	bgCtx, bgCancel := context.WithCancel(context.Background())
@@ -107,6 +109,12 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		api.GET("/employees/:id", employeeHandler.GetEmployee)
 		api.GET("/recruitment/role", recruitmentHandler.GetMyRole)
 		api.DELETE("/comments/:commentId", candidateCommentHandler.DeleteComment) // Uses service-level auth
+
+		// Notifications
+		api.GET("/notifications", notificationHandler.GetUserNotifications)
+		api.GET("/notifications/unread-count", notificationHandler.GetUnreadCount)
+		api.PUT("/notifications/:id/read", notificationHandler.MarkAsRead)
+		api.PUT("/notifications/read-all", notificationHandler.MarkAllAsRead)
 	}
 
 	// Recruiter Write Access

@@ -36,6 +36,7 @@ type Querier interface {
 	// Interview queries
 	CreateInterview(ctx context.Context, arg CreateInterviewParams) (CreateInterviewRow, error)
 	CreateJob(ctx context.Context, arg CreateJobParams) (Job, error)
+	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	// Session queries
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
@@ -61,7 +62,9 @@ type Querier interface {
 	GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error)
 	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
+	GetNotificationsByUserId(ctx context.Context, arg GetNotificationsByUserIdParams) ([]Notification, error)
 	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
+	GetUnreadNotificationCount(ctx context.Context, userID pgtype.UUID) (int64, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
 	GetUserSessions(ctx context.Context, userID pgtype.UUID) ([]Session, error)
@@ -80,6 +83,8 @@ type Querier interface {
 	ListJobs(ctx context.Context) ([]Job, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)
+	MarkAllNotificationsAsRead(ctx context.Context, userID pgtype.UUID) error
+	MarkNotificationAsRead(ctx context.Context, arg MarkNotificationAsReadParams) error
 	RefreshToken(ctx context.Context, id pgtype.UUID) (Session, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
 	RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error
