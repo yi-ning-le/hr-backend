@@ -1185,13 +1185,14 @@ SELECT
   cr.review_status,
   j.title as applied_job_title,
   cr.assigned_at,
-  cr.removed_at
+  cr.removed_at,
+  cr.reviewed_at
 FROM candidate_reviewers cr
 JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE cr.reviewer_id = $1
   AND cr.review_status != 'pending'
-ORDER BY cr.assigned_at DESC
+ORDER BY cr.reviewed_at DESC NULLS LAST, cr.assigned_at DESC, c.id DESC
 `
 
 type GetPastReviewedCandidatesRow struct {
@@ -1214,6 +1215,7 @@ type GetPastReviewedCandidatesRow struct {
 	AppliedJobTitle string             `json:"applied_job_title"`
 	AssignedAt      pgtype.Timestamp   `json:"assigned_at"`
 	RemovedAt       pgtype.Timestamp   `json:"removed_at"`
+	ReviewedAt      pgtype.Timestamptz `json:"reviewed_at"`
 }
 
 func (q *Queries) GetPastReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]GetPastReviewedCandidatesRow, error) {
@@ -1245,6 +1247,7 @@ func (q *Queries) GetPastReviewedCandidates(ctx context.Context, reviewerID pgty
 			&i.AppliedJobTitle,
 			&i.AssignedAt,
 			&i.RemovedAt,
+			&i.ReviewedAt,
 		); err != nil {
 			return nil, err
 		}

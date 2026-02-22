@@ -20,19 +20,20 @@ type candidateHistoryItem struct {
 }
 
 type reviewerCandidateItem struct {
-	ID              string    `json:"id"`
-	Name            string    `json:"name"`
-	Email           string    `json:"email"`
-	Phone           string    `json:"phone"`
-	ExperienceYears int32     `json:"experienceYears"`
-	Education       string    `json:"education"`
-	AppliedJobID    string    `json:"appliedJobId"`
-	AppliedJobTitle string    `json:"appliedJobTitle"`
-	Channel         string    `json:"channel"`
-	ResumeURL       string    `json:"resumeUrl"`
-	Status          string    `json:"status"`
-	ReviewStatus    string    `json:"reviewStatus"`
-	AppliedAt       time.Time `json:"appliedAt"`
+	ID              string     `json:"id"`
+	Name            string     `json:"name"`
+	Email           string     `json:"email"`
+	Phone           string     `json:"phone"`
+	ExperienceYears int32      `json:"experienceYears"`
+	Education       string     `json:"education"`
+	AppliedJobID    string     `json:"appliedJobId"`
+	AppliedJobTitle string     `json:"appliedJobTitle"`
+	Channel         string     `json:"channel"`
+	ResumeURL       string     `json:"resumeUrl"`
+	Status          string     `json:"status"`
+	ReviewStatus    string     `json:"reviewStatus"`
+	AppliedAt       time.Time  `json:"appliedAt"`
+	ReviewedAt      *time.Time `json:"reviewedAt,omitempty"`
 }
 
 // GetCandidateHistory returns the history of a candidate.
@@ -197,7 +198,7 @@ func mapPendingReviewCandidateRows(rows []repository.ListPendingReviewCandidates
 func mapPastReviewedCandidateRows(rows []repository.GetPastReviewedCandidatesRow) []reviewerCandidateItem {
 	items := make([]reviewerCandidateItem, len(rows))
 	for i, row := range rows {
-		items[i] = reviewerCandidateItem{
+		item := reviewerCandidateItem{
 			ID:              uuidToString(row.ID),
 			Name:            row.Name,
 			Email:           row.Email,
@@ -212,6 +213,11 @@ func mapPastReviewedCandidateRows(rows []repository.GetPastReviewedCandidatesRow
 			ReviewStatus:    row.ReviewStatus,
 			AppliedAt:       row.AppliedAt.Time,
 		}
+		if row.ReviewedAt.Valid {
+			t := row.ReviewedAt.Time
+			item.ReviewedAt = &t
+		}
+		items[i] = item
 	}
 	return items
 }

@@ -579,13 +579,14 @@ SELECT
   cr.review_status,
   j.title as applied_job_title,
   cr.assigned_at,
-  cr.removed_at
+  cr.removed_at,
+  cr.reviewed_at
 FROM candidate_reviewers cr
 JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE cr.reviewer_id = $1
   AND cr.review_status != 'pending'
-ORDER BY cr.assigned_at DESC;
+ORDER BY cr.reviewed_at DESC NULLS LAST, cr.assigned_at DESC, c.id DESC;
 
 -- Session queries
 
