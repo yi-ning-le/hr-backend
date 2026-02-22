@@ -31,7 +31,7 @@ func TestCandidateStatusHandler_ReorderStatuses_InvalidIDReturns400(t *testing.T
 	r.PATCH("/candidate-statuses/reorder", h.ReorderStatuses)
 
 	body, _ := json.Marshal(map[string][]string{
-		"ids": []string{"invalid-uuid"},
+		"ids": {"invalid-uuid"},
 	})
 	req, _ := http.NewRequest(http.MethodPatch, "/candidate-statuses/reorder", bytes.NewBuffer(body))
 	req.Header.Set("Content-Type", "application/json")

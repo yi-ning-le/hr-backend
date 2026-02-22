@@ -2,6 +2,7 @@ package service_test
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -9,10 +10,12 @@ import (
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
 	"hr-backend/internal/service"
+	"hr-backend/internal/utils"
 	"hr-backend/test/mocks"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateCandidate(t *testing.T) {
@@ -157,7 +160,7 @@ func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
 	}
 
 	svc := service.NewCandidateService(mockRepo)
-	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable",)
+	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable")
 	if !errors.Is(err, service.ErrReviewPermissionDenied) {
 		t.Fatalf("expected ErrReviewPermissionDenied, got %v", err)
 	}
@@ -179,7 +182,6 @@ func TestSubmitReview_ReviewerProfileNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
-		
 	)
 
 	if !errors.Is(err, service.ErrReviewerProfileNotFound) {
@@ -208,7 +210,6 @@ func TestSubmitReview_CandidateNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
-		
 	)
 
 	if !errors.Is(err, service.ErrCandidateNotFound) {
@@ -228,8 +229,15 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 		t.Fatalf("failed to scan reviewer id: %v", err)
 	}
 
-	callOrder := make([]string, 0, 2)
+	callOrder := make([]string, 0, 3)
+	mockUserID := pgtype.UUID{Bytes: [16]byte{9, 9, 9}, Valid: true}
 	mockRepo := &mocks.MockQuerier{
+		GetEmployeeFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			if id != reviewerID {
+				return repository.Employee{}, pgx.ErrNoRows
+			}
+			return repository.Employee{ID: reviewerID, UserID: mockUserID}, nil
+		},
 		AssignReviewerFunc: func(ctx context.Context, arg repository.AssignReviewerParams) (repository.AssignReviewerRow, error) {
 			return repository.AssignReviewerRow{
 				ID:         arg.ID,
@@ -253,6 +261,19 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 			}
 			return repository.CandidateReviewer{}, nil
 		},
+		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+			callOrder = append(callOrder, "create_notification")
+			if arg.UserID != mockUserID {
+				t.Fatalf("expected notification user id %v, got %v", mockUserID, arg.UserID)
+			}
+			assert.Equal(t, model.NotificationEventCandidateReviewerAssigned, arg.EventType)
+			assert.Equal(t, model.NotificationSubjectTypeCandidate, arg.SubjectType)
+			assert.Equal(t, candidateID, arg.SubjectID)
+			var contextPayload map[string]string
+			assert.NoError(t, json.Unmarshal(arg.Context, &contextPayload))
+			assert.Equal(t, utils.UUIDToString(candidateID), contextPayload["candidateId"])
+			return repository.Notification{}, nil
+		},
 	}
 
 	svc := service.NewCandidateService(mockRepo)
@@ -261,7 +282,7 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 
-	if len(callOrder) != 2 || callOrder[0] != "remove_old" || callOrder[1] != "insert_new" {
+	if len(callOrder) != 3 || callOrder[0] != "remove_old" || callOrder[1] != "insert_new" || callOrder[2] != "create_notification" {
 		t.Fatalf("unexpected call order: %v", callOrder)
 	}
 }

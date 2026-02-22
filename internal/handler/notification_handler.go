@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"errors"
 	"net/http"
 
 	"hr-backend/internal/service"
@@ -30,7 +31,7 @@ func (h *NotificationHandler) GetUserNotifications(c *gin.Context) {
 
 	notifications, err := h.service.GetUserNotifications(c.Request.Context(), userID.(string), limit, offset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.handleServiceError(c, err)
 		return
 	}
 	c.JSON(http.StatusOK, notifications)
@@ -46,7 +47,7 @@ func (h *NotificationHandler) GetUnreadCount(c *gin.Context) {
 
 	count, err := h.service.GetUnreadCount(c.Request.Context(), userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.handleServiceError(c, err)
 		return
 	}
 
@@ -64,7 +65,7 @@ func (h *NotificationHandler) MarkAsRead(c *gin.Context) {
 	id := c.Param("id")
 	err := h.service.MarkAsRead(c.Request.Context(), id, userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.handleServiceError(c, err)
 		return
 	}
 
@@ -82,9 +83,40 @@ func (h *NotificationHandler) MarkAllAsRead(c *gin.Context) {
 
 	err := h.service.MarkAllAsRead(c.Request.Context(), userID.(string))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		h.handleServiceError(c, err)
 		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+// DeleteNotification godoc
+func (h *NotificationHandler) DeleteNotification(c *gin.Context) {
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return
+	}
+
+	id := c.Param("id")
+	if id == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "id is required"})
+		return
+	}
+
+	err := h.service.DeleteNotification(c.Request.Context(), id, userID.(string))
+	if err != nil {
+		h.handleServiceError(c, err)
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "success"})
+}
+
+func (h *NotificationHandler) handleServiceError(c *gin.Context, err error) {
+	if errors.Is(err, service.ErrInvalidUUID) {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 }

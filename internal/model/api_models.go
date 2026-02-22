@@ -42,7 +42,6 @@ type Candidate struct {
 	AppliedAt       time.Time `json:"appliedAt"`
 	ReviewerID      string    `json:"reviewerId,omitempty"`
 	ReviewStatus    string    `json:"reviewStatus,omitempty"`
-
 }
 
 // CandidateInput matches the CandidateInput schema

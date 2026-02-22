@@ -36,12 +36,14 @@ type CandidateComment struct {
 }
 
 type CandidateReviewer struct {
-	ID          pgtype.UUID      `json:"id"`
-	CandidateID pgtype.UUID      `json:"candidate_id"`
-	ReviewerID  pgtype.UUID      `json:"reviewer_id"`
-	AssignedAt  pgtype.Timestamp `json:"assigned_at"`
-	RemovedAt   pgtype.Timestamp `json:"removed_at"`
-	CreatedAt   pgtype.Timestamp `json:"created_at"`
+	ID           pgtype.UUID        `json:"id"`
+	CandidateID  pgtype.UUID        `json:"candidate_id"`
+	ReviewerID   pgtype.UUID        `json:"reviewer_id"`
+	AssignedAt   pgtype.Timestamp   `json:"assigned_at"`
+	RemovedAt    pgtype.Timestamp   `json:"removed_at"`
+	CreatedAt    pgtype.Timestamp   `json:"created_at"`
+	ReviewStatus string             `json:"review_status"`
+	ReviewedAt   pgtype.Timestamptz `json:"reviewed_at"`
 }
 
 type CandidateStatus struct {
@@ -106,14 +108,14 @@ type Job struct {
 }
 
 type Notification struct {
-	ID        pgtype.UUID        `json:"id"`
-	UserID    pgtype.UUID        `json:"user_id"`
-	Title     string             `json:"title"`
-	Message   string             `json:"message"`
-	Type      string             `json:"type"`
-	LinkUrl   pgtype.Text        `json:"link_url"`
-	IsRead    bool               `json:"is_read"`
-	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ID          pgtype.UUID        `json:"id"`
+	UserID      pgtype.UUID        `json:"user_id"`
+	EventType   string             `json:"event_type"`
+	SubjectType string             `json:"subject_type"`
+	SubjectID   pgtype.UUID        `json:"subject_id"`
+	Context     []byte             `json:"context"`
+	ReadAt      pgtype.Timestamptz `json:"read_at"`
+	CreatedAt   pgtype.Timestamptz `json:"created_at"`
 }
 
 type RecruitmentRole struct {

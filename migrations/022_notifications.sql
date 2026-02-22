@@ -1,18 +1,25 @@
--- +goose Up
--- +goose StatementBegin
 CREATE TABLE notifications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    title VARCHAR(255) NOT NULL,
-    message TEXT NOT NULL,
-    type VARCHAR(50) NOT NULL,
-    link_url VARCHAR(255),
-    is_read BOOLEAN NOT NULL DEFAULT false,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT CURRENT_TIMESTAMP
+    event_type VARCHAR(64) NOT NULL,
+    subject_type VARCHAR(64) NOT NULL,
+    subject_id UUID NOT NULL,
+    context JSONB NOT NULL DEFAULT '{}'::jsonb,
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT chk_notifications_event_type
+        CHECK (event_type IN ('candidate_reviewer_assigned', 'interview_assigned')),
+    CONSTRAINT chk_notifications_subject_type
+        CHECK (subject_type IN ('candidate', 'interview'))
 );
 
-CREATE INDEX idx_notifications_user_id ON notifications(user_id);
-CREATE INDEX idx_notifications_user_id_is_read ON notifications(user_id, is_read);
--- +goose StatementEnd
+CREATE INDEX idx_notifications_user_created_at
+ON notifications (user_id, created_at DESC);
 
+CREATE INDEX idx_notifications_user_unread
+ON notifications (user_id, read_at)
+WHERE read_at IS NULL;
+
+CREATE INDEX idx_notifications_subject
+ON notifications (subject_type, subject_id);
 

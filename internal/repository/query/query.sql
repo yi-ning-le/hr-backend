@@ -482,7 +482,11 @@ LIMIT 1;
 -- name: InsertCandidateReviewer :one
 INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
 VALUES ($1, $2)
-ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET assigned_at = CURRENT_TIMESTAMP, removed_at = NULL
+ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET
+  assigned_at = CURRENT_TIMESTAMP,
+  removed_at = NULL,
+  review_status = 'pending',
+  reviewed_at = NULL
 RETURNING *;
 
 -- name: UpdateCandidateReviewerRemovedAt :exec
@@ -490,12 +494,97 @@ UPDATE candidate_reviewers
 SET removed_at = CURRENT_TIMESTAMP
 WHERE candidate_id = $1 AND removed_at IS NULL;
 
--- name: ListReviewedCandidates :many
-SELECT c.*, j.title as applied_job_title, cr.assigned_at, cr.removed_at
+-- name: UpdateCandidateReviewerReviewStatus :exec
+UPDATE candidate_reviewers
+SET review_status = sqlc.arg('review_status')::varchar,
+    reviewed_at = CASE
+        WHEN sqlc.arg('review_status')::varchar = 'pending' THEN NULL
+        ELSE CURRENT_TIMESTAMP
+    END
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL;
+
+-- name: ListPendingReviewCandidates :many
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title
 FROM candidate_reviewers cr
 JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
 WHERE cr.reviewer_id = $1
+  AND cr.removed_at IS NULL
+  AND cr.review_status = 'pending'
+ORDER BY cr.assigned_at DESC;
+
+-- name: ListReviewedCandidates :many
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title,
+  cr.assigned_at,
+  cr.removed_at
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+ORDER BY cr.assigned_at DESC;
+
+-- name: GetPastReviewedCandidates :many
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title,
+  cr.assigned_at,
+  cr.removed_at
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+  AND cr.review_status != 'pending'
 ORDER BY cr.assigned_at DESC;
 
 -- Session queries
@@ -551,3 +640,35 @@ AND (last_active_at IS NULL OR last_active_at < (CURRENT_TIMESTAMP - INTERVAL '5
 -- name: DeleteInactiveSessions :exec
 DELETE FROM sessions 
 WHERE last_active_at < $1;
+
+-- name: GetCandidateHistoryForReviewer :many
+SELECT 
+    c.id as candidate_id,
+    c.name as candidate_name,
+    c.status as status,
+    cr.review_status as review_status,
+    c.applied_at as applied_at,
+    j.title as job_title
+FROM candidates c
+JOIN jobs j ON c.applied_job_id = j.id
+JOIN candidate_reviewers cr ON cr.candidate_id = c.id
+WHERE (c.email = (SELECT email FROM candidates WHERE id = sqlc.arg('candidate_id')::uuid)
+   OR c.phone = (SELECT phone FROM candidates WHERE id = sqlc.arg('candidate_id')::uuid))
+  AND cr.reviewer_id = sqlc.arg('reviewer_id')::uuid
+  AND cr.review_status != 'pending'
+ORDER BY c.applied_at DESC;
+
+-- name: GetCandidateHistory :many
+SELECT 
+    c.id as candidate_id,
+    c.name as candidate_name,
+    c.status as status,
+    COALESCE(cr.review_status, 'pending') as review_status,
+    c.applied_at as applied_at,
+    j.title as job_title
+FROM candidates c
+JOIN jobs j ON c.applied_job_id = j.id
+LEFT JOIN candidate_reviewers cr ON cr.candidate_id = c.id AND cr.removed_at IS NULL
+WHERE (c.email = (SELECT email FROM candidates WHERE id = $1::uuid)
+   OR c.phone = (SELECT phone FROM candidates WHERE id = $1::uuid))
+ORDER BY c.applied_at DESC;

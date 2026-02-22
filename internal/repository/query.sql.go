@@ -906,6 +906,117 @@ func (q *Queries) GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCo
 	return items, nil
 }
 
+const getCandidateHistory = `-- name: GetCandidateHistory :many
+SELECT 
+    c.id as candidate_id,
+    c.name as candidate_name,
+    c.status as status,
+    COALESCE(cr.review_status, 'pending') as review_status,
+    c.applied_at as applied_at,
+    j.title as job_title
+FROM candidates c
+JOIN jobs j ON c.applied_job_id = j.id
+LEFT JOIN candidate_reviewers cr ON cr.candidate_id = c.id AND cr.removed_at IS NULL
+WHERE (c.email = (SELECT email FROM candidates WHERE id = $1::uuid)
+   OR c.phone = (SELECT phone FROM candidates WHERE id = $1::uuid))
+ORDER BY c.applied_at DESC
+`
+
+type GetCandidateHistoryRow struct {
+	CandidateID   pgtype.UUID        `json:"candidate_id"`
+	CandidateName string             `json:"candidate_name"`
+	Status        string             `json:"status"`
+	ReviewStatus  string             `json:"review_status"`
+	AppliedAt     pgtype.Timestamptz `json:"applied_at"`
+	JobTitle      string             `json:"job_title"`
+}
+
+func (q *Queries) GetCandidateHistory(ctx context.Context, dollar_1 pgtype.UUID) ([]GetCandidateHistoryRow, error) {
+	rows, err := q.db.Query(ctx, getCandidateHistory, dollar_1)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCandidateHistoryRow
+	for rows.Next() {
+		var i GetCandidateHistoryRow
+		if err := rows.Scan(
+			&i.CandidateID,
+			&i.CandidateName,
+			&i.Status,
+			&i.ReviewStatus,
+			&i.AppliedAt,
+			&i.JobTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getCandidateHistoryForReviewer = `-- name: GetCandidateHistoryForReviewer :many
+SELECT 
+    c.id as candidate_id,
+    c.name as candidate_name,
+    c.status as status,
+    cr.review_status as review_status,
+    c.applied_at as applied_at,
+    j.title as job_title
+FROM candidates c
+JOIN jobs j ON c.applied_job_id = j.id
+JOIN candidate_reviewers cr ON cr.candidate_id = c.id
+WHERE (c.email = (SELECT email FROM candidates WHERE id = $1::uuid)
+   OR c.phone = (SELECT phone FROM candidates WHERE id = $1::uuid))
+  AND cr.reviewer_id = $2::uuid
+  AND cr.review_status != 'pending'
+ORDER BY c.applied_at DESC
+`
+
+type GetCandidateHistoryForReviewerParams struct {
+	CandidateID pgtype.UUID `json:"candidate_id"`
+	ReviewerID  pgtype.UUID `json:"reviewer_id"`
+}
+
+type GetCandidateHistoryForReviewerRow struct {
+	CandidateID   pgtype.UUID        `json:"candidate_id"`
+	CandidateName string             `json:"candidate_name"`
+	Status        string             `json:"status"`
+	ReviewStatus  string             `json:"review_status"`
+	AppliedAt     pgtype.Timestamptz `json:"applied_at"`
+	JobTitle      string             `json:"job_title"`
+}
+
+func (q *Queries) GetCandidateHistoryForReviewer(ctx context.Context, arg GetCandidateHistoryForReviewerParams) ([]GetCandidateHistoryForReviewerRow, error) {
+	rows, err := q.db.Query(ctx, getCandidateHistoryForReviewer, arg.CandidateID, arg.ReviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetCandidateHistoryForReviewerRow
+	for rows.Next() {
+		var i GetCandidateHistoryForReviewerRow
+		if err := rows.Scan(
+			&i.CandidateID,
+			&i.CandidateName,
+			&i.Status,
+			&i.ReviewStatus,
+			&i.AppliedAt,
+			&i.JobTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getCandidateStatus = `-- name: GetCandidateStatus :one
 SELECT id, name, slug, type, sort_order, color, created_at, updated_at, is_deleted FROM candidate_statuses
 WHERE id = $1 LIMIT 1
@@ -1054,6 +1165,97 @@ func (q *Queries) GetJob(ctx context.Context, id pgtype.UUID) (Job, error) {
 	return i, err
 }
 
+const getPastReviewedCandidates = `-- name: GetPastReviewedCandidates :many
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title,
+  cr.assigned_at,
+  cr.removed_at
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+  AND cr.review_status != 'pending'
+ORDER BY cr.assigned_at DESC
+`
+
+type GetPastReviewedCandidatesRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	Name            string             `json:"name"`
+	Avatar          pgtype.Text        `json:"avatar"`
+	Email           string             `json:"email"`
+	Phone           string             `json:"phone"`
+	ExperienceYears int32              `json:"experience_years"`
+	Education       string             `json:"education"`
+	AppliedJobID    pgtype.UUID        `json:"applied_job_id"`
+	Channel         string             `json:"channel"`
+	ResumeUrl       string             `json:"resume_url"`
+	Status          string             `json:"status"`
+	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
+	ReviewStatus    string             `json:"review_status"`
+	AppliedJobTitle string             `json:"applied_job_title"`
+	AssignedAt      pgtype.Timestamp   `json:"assigned_at"`
+	RemovedAt       pgtype.Timestamp   `json:"removed_at"`
+}
+
+func (q *Queries) GetPastReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]GetPastReviewedCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, getPastReviewedCandidates, reviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetPastReviewedCandidatesRow
+	for rows.Next() {
+		var i GetPastReviewedCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Avatar,
+			&i.Email,
+			&i.Phone,
+			&i.ExperienceYears,
+			&i.Education,
+			&i.AppliedJobID,
+			&i.Channel,
+			&i.ResumeUrl,
+			&i.Status,
+			&i.AppliedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReviewerID,
+			&i.ReviewStatus,
+			&i.AppliedJobTitle,
+			&i.AssignedAt,
+			&i.RemovedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getSessionByID = `-- name: GetSessionByID :one
 SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions WHERE id = $1 LIMIT 1
 `
@@ -1165,8 +1367,12 @@ func (q *Queries) HasInterviewAssignments(ctx context.Context, interviewerID pgt
 const insertCandidateReviewer = `-- name: InsertCandidateReviewer :one
 INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
 VALUES ($1, $2)
-ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET assigned_at = CURRENT_TIMESTAMP, removed_at = NULL
-RETURNING id, candidate_id, reviewer_id, assigned_at, removed_at, created_at
+ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET
+  assigned_at = CURRENT_TIMESTAMP,
+  removed_at = NULL,
+  review_status = 'pending',
+  reviewed_at = NULL
+RETURNING id, candidate_id, reviewer_id, assigned_at, removed_at, created_at, review_status, reviewed_at
 `
 
 type InsertCandidateReviewerParams struct {
@@ -1184,6 +1390,8 @@ func (q *Queries) InsertCandidateReviewer(ctx context.Context, arg InsertCandida
 		&i.AssignedAt,
 		&i.RemovedAt,
 		&i.CreatedAt,
+		&i.ReviewStatus,
+		&i.ReviewedAt,
 	)
 	return i, err
 }
@@ -1711,6 +1919,92 @@ func (q *Queries) ListJobs(ctx context.Context) ([]Job, error) {
 	return items, nil
 }
 
+const listPendingReviewCandidates = `-- name: ListPendingReviewCandidates :many
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title
+FROM candidate_reviewers cr
+JOIN candidates c ON cr.candidate_id = c.id
+JOIN jobs j ON c.applied_job_id = j.id
+WHERE cr.reviewer_id = $1
+  AND cr.removed_at IS NULL
+  AND cr.review_status = 'pending'
+ORDER BY cr.assigned_at DESC
+`
+
+type ListPendingReviewCandidatesRow struct {
+	ID              pgtype.UUID        `json:"id"`
+	Name            string             `json:"name"`
+	Avatar          pgtype.Text        `json:"avatar"`
+	Email           string             `json:"email"`
+	Phone           string             `json:"phone"`
+	ExperienceYears int32              `json:"experience_years"`
+	Education       string             `json:"education"`
+	AppliedJobID    pgtype.UUID        `json:"applied_job_id"`
+	Channel         string             `json:"channel"`
+	ResumeUrl       string             `json:"resume_url"`
+	Status          string             `json:"status"`
+	AppliedAt       pgtype.Timestamptz `json:"applied_at"`
+	CreatedAt       pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
+	ReviewStatus    string             `json:"review_status"`
+	AppliedJobTitle string             `json:"applied_job_title"`
+}
+
+func (q *Queries) ListPendingReviewCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListPendingReviewCandidatesRow, error) {
+	rows, err := q.db.Query(ctx, listPendingReviewCandidates, reviewerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPendingReviewCandidatesRow
+	for rows.Next() {
+		var i ListPendingReviewCandidatesRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.Avatar,
+			&i.Email,
+			&i.Phone,
+			&i.ExperienceYears,
+			&i.Education,
+			&i.AppliedJobID,
+			&i.Channel,
+			&i.ResumeUrl,
+			&i.Status,
+			&i.AppliedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.ReviewerID,
+			&i.ReviewStatus,
+			&i.AppliedJobTitle,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listRecruiters = `-- name: ListRecruiters :many
 SELECT e.id, e.first_name, e.last_name, e.department, e.phone
 FROM recruitment_roles rr
@@ -1756,7 +2050,26 @@ func (q *Queries) ListRecruiters(ctx context.Context) ([]ListRecruitersRow, erro
 }
 
 const listReviewedCandidates = `-- name: ListReviewedCandidates :many
-SELECT c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title, cr.assigned_at, cr.removed_at
+SELECT
+  c.id,
+  c.name,
+  c.avatar,
+  c.email,
+  c.phone,
+  c.experience_years,
+  c.education,
+  c.applied_job_id,
+  c.channel,
+  c.resume_url,
+  c.status,
+  c.applied_at,
+  c.created_at,
+  c.updated_at,
+  cr.reviewer_id,
+  cr.review_status,
+  j.title as applied_job_title,
+  cr.assigned_at,
+  cr.removed_at
 FROM candidate_reviewers cr
 JOIN candidates c ON cr.candidate_id = c.id
 JOIN jobs j ON c.applied_job_id = j.id
@@ -1780,7 +2093,7 @@ type ListReviewedCandidatesRow struct {
 	CreatedAt       pgtype.Timestamptz `json:"created_at"`
 	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
 	ReviewerID      pgtype.UUID        `json:"reviewer_id"`
-	ReviewStatus    pgtype.Text        `json:"review_status"`
+	ReviewStatus    string             `json:"review_status"`
 	AppliedJobTitle string             `json:"applied_job_title"`
 	AssignedAt      pgtype.Timestamp   `json:"assigned_at"`
 	RemovedAt       pgtype.Timestamp   `json:"removed_at"`
@@ -2084,6 +2397,29 @@ WHERE candidate_id = $1 AND removed_at IS NULL
 
 func (q *Queries) UpdateCandidateReviewerRemovedAt(ctx context.Context, candidateID pgtype.UUID) error {
 	_, err := q.db.Exec(ctx, updateCandidateReviewerRemovedAt, candidateID)
+	return err
+}
+
+const updateCandidateReviewerReviewStatus = `-- name: UpdateCandidateReviewerReviewStatus :exec
+UPDATE candidate_reviewers
+SET review_status = $3::varchar,
+    reviewed_at = CASE
+        WHEN $3::varchar = 'pending' THEN NULL
+        ELSE CURRENT_TIMESTAMP
+    END
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL
+`
+
+type UpdateCandidateReviewerReviewStatusParams struct {
+	CandidateID  pgtype.UUID `json:"candidate_id"`
+	ReviewerID   pgtype.UUID `json:"reviewer_id"`
+	ReviewStatus string      `json:"review_status"`
+}
+
+func (q *Queries) UpdateCandidateReviewerReviewStatus(ctx context.Context, arg UpdateCandidateReviewerReviewStatusParams) error {
+	_, err := q.db.Exec(ctx, updateCandidateReviewerReviewStatus, arg.CandidateID, arg.ReviewerID, arg.ReviewStatus)
 	return err
 }
 

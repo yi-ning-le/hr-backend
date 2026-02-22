@@ -89,11 +89,16 @@ type MockQuerier struct {
 	DeleteCandidateCommentFunc func(ctx context.Context, id pgtype.UUID) error
 
 	// Candidate Reviewer mock functions
-	CountCandidateReviewerAssignmentsFunc func(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
-	IsCandidateReviewerFunc               func(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error)
-	InsertCandidateReviewerFunc           func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error)
-	UpdateCandidateReviewerRemovedAtFunc  func(ctx context.Context, candidateID pgtype.UUID) error
-	ListReviewedCandidatesFunc            func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error)
+	CountCandidateReviewerAssignmentsFunc   func(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
+	IsCandidateReviewerFunc                 func(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error)
+	InsertCandidateReviewerFunc             func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error)
+	UpdateCandidateReviewerRemovedAtFunc    func(ctx context.Context, candidateID pgtype.UUID) error
+	UpdateCandidateReviewerReviewStatusFunc func(ctx context.Context, arg repository.UpdateCandidateReviewerReviewStatusParams) error
+	ListPendingReviewCandidatesFunc         func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListPendingReviewCandidatesRow, error)
+	ListReviewedCandidatesFunc              func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error)
+	GetPastReviewedCandidatesFunc           func(ctx context.Context, reviewerID pgtype.UUID) ([]repository.GetPastReviewedCandidatesRow, error)
+	GetCandidateHistoryFunc                 func(ctx context.Context, candidateID pgtype.UUID) ([]repository.GetCandidateHistoryRow, error)
+	GetCandidateHistoryForReviewerFunc      func(ctx context.Context, arg repository.GetCandidateHistoryForReviewerParams) ([]repository.GetCandidateHistoryForReviewerRow, error)
 
 	// Session mock functions
 	CreateSessionFunc          func(ctx context.Context, arg repository.CreateSessionParams) (repository.Session, error)
@@ -110,11 +115,13 @@ type MockQuerier struct {
 	DeleteInactiveSessionsFunc func(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
 
 	// Notification mock functions
-	CreateNotificationFunc         func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error)
-	GetNotificationsByUserIdFunc   func(ctx context.Context, arg repository.GetNotificationsByUserIdParams) ([]repository.Notification, error)
-	GetUnreadNotificationCountFunc func(ctx context.Context, userID pgtype.UUID) (int64, error)
-	MarkAllNotificationsAsReadFunc func(ctx context.Context, userID pgtype.UUID) error
-	MarkNotificationAsReadFunc     func(ctx context.Context, arg repository.MarkNotificationAsReadParams) error
+	CreateNotificationFunc                  func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error)
+	GetNotificationsByUserIdFunc            func(ctx context.Context, arg repository.GetNotificationsByUserIdParams) ([]repository.Notification, error)
+	GetUnreadNotificationCountFunc          func(ctx context.Context, userID pgtype.UUID) (int64, error)
+	MarkAllNotificationsAsReadFunc          func(ctx context.Context, userID pgtype.UUID) error
+	MarkNotificationAsReadFunc              func(ctx context.Context, arg repository.MarkNotificationAsReadParams) error
+	DeleteNotificationsBySubjectAndTypeFunc func(ctx context.Context, arg repository.DeleteNotificationsBySubjectAndTypeParams) error
+	DeleteNotificationFunc                  func(ctx context.Context, arg repository.DeleteNotificationParams) error
 }
 
 func (m *MockQuerier) CreateJob(ctx context.Context, arg repository.CreateJobParams) (repository.Job, error) {
@@ -177,7 +184,10 @@ func (m *MockQuerier) AssignReviewer(ctx context.Context, arg repository.AssignR
 }
 
 func (m *MockQuerier) SubmitReview(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
-	return m.SubmitReviewFunc(ctx, arg)
+	if m.SubmitReviewFunc != nil {
+		return m.SubmitReviewFunc(ctx, arg)
+	}
+	return repository.SubmitReviewRow{}, nil
 }
 
 func (m *MockQuerier) CreateUser(ctx context.Context, arg repository.CreateUserParams) (repository.User, error) {
@@ -486,9 +496,44 @@ func (m *MockQuerier) UpdateCandidateReviewerRemovedAt(ctx context.Context, cand
 	return nil
 }
 
+func (m *MockQuerier) UpdateCandidateReviewerReviewStatus(ctx context.Context, arg repository.UpdateCandidateReviewerReviewStatusParams) error {
+	if m.UpdateCandidateReviewerReviewStatusFunc != nil {
+		return m.UpdateCandidateReviewerReviewStatusFunc(ctx, arg)
+	}
+	return nil
+}
+
+func (m *MockQuerier) ListPendingReviewCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListPendingReviewCandidatesRow, error) {
+	if m.ListPendingReviewCandidatesFunc != nil {
+		return m.ListPendingReviewCandidatesFunc(ctx, reviewerID)
+	}
+	return nil, nil
+}
+
 func (m *MockQuerier) ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]repository.ListReviewedCandidatesRow, error) {
 	if m.ListReviewedCandidatesFunc != nil {
 		return m.ListReviewedCandidatesFunc(ctx, reviewerID)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) GetPastReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]repository.GetPastReviewedCandidatesRow, error) {
+	if m.GetPastReviewedCandidatesFunc != nil {
+		return m.GetPastReviewedCandidatesFunc(ctx, reviewerID)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) GetCandidateHistory(ctx context.Context, candidateID pgtype.UUID) ([]repository.GetCandidateHistoryRow, error) {
+	if m.GetCandidateHistoryFunc != nil {
+		return m.GetCandidateHistoryFunc(ctx, candidateID)
+	}
+	return nil, nil
+}
+
+func (m *MockQuerier) GetCandidateHistoryForReviewer(ctx context.Context, arg repository.GetCandidateHistoryForReviewerParams) ([]repository.GetCandidateHistoryForReviewerRow, error) {
+	if m.GetCandidateHistoryForReviewerFunc != nil {
+		return m.GetCandidateHistoryForReviewerFunc(ctx, arg)
 	}
 	return nil, nil
 }
@@ -630,6 +675,20 @@ func (m *MockQuerier) MarkAllNotificationsAsRead(ctx context.Context, userID pgt
 func (m *MockQuerier) MarkNotificationAsRead(ctx context.Context, arg repository.MarkNotificationAsReadParams) error {
 	if m.MarkNotificationAsReadFunc != nil {
 		return m.MarkNotificationAsReadFunc(ctx, arg)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteNotificationsBySubjectAndType(ctx context.Context, arg repository.DeleteNotificationsBySubjectAndTypeParams) error {
+	if m.DeleteNotificationsBySubjectAndTypeFunc != nil {
+		return m.DeleteNotificationsBySubjectAndTypeFunc(ctx, arg)
+	}
+	return nil
+}
+
+func (m *MockQuerier) DeleteNotification(ctx context.Context, arg repository.DeleteNotificationParams) error {
+	if m.DeleteNotificationFunc != nil {
+		return m.DeleteNotificationFunc(ctx, arg)
 	}
 	return nil
 }

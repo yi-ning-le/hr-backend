@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"errors"
+	"log"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -13,7 +14,8 @@ import (
 )
 
 type CandidateService struct {
-	repo repository.Querier
+	repo                  repository.Querier
+	notificationPublisher *NotificationPublisher
 }
 
 var (
@@ -23,7 +25,10 @@ var (
 )
 
 func NewCandidateService(repo repository.Querier) *CandidateService {
-	return &CandidateService{repo: repo}
+	return &CandidateService{
+		repo:                  repo,
+		notificationPublisher: NewNotificationPublisher(repo),
+	}
 }
 
 func (s *CandidateService) CreateCandidate(ctx context.Context, input model.CandidateInput) (*model.Candidate, error) {
@@ -175,6 +180,16 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 		return nil, err
 	}
 
+	if err := s.notificationPublisher.PublishCandidateReviewerAssigned(ctx, reviewerUUID, uuid); err != nil {
+		log.Printf(
+			"warn: failed to publish notification event=%s reviewer_id=%s candidate_id=%s err=%v",
+			model.NotificationEventCandidateReviewerAssigned,
+			utils.UUIDToString(reviewerUUID),
+			id,
+			err,
+		)
+	}
+
 	return mapAssignReviewerRowToModel(row), nil
 }
 
@@ -205,7 +220,22 @@ func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID s
 		return nil, err
 	}
 
-	if !candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID) {
+	assignmentID, err := s.repo.IsCandidateReviewer(ctx, repository.IsCandidateReviewerParams{
+		CandidateID: candidateID,
+		ReviewerID:  employee.ID,
+	})
+	if err != nil {
+		// Legacy fallback for rows created before assignment-table based review status.
+		if errors.Is(err, pgx.ErrNoRows) {
+			if !candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID) {
+				return nil, ErrReviewPermissionDenied
+			}
+		} else {
+			return nil, err
+		}
+	}
+	if !assignmentID.Valid &&
+		(!candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID)) {
 		return nil, ErrReviewPermissionDenied
 	}
 
@@ -216,6 +246,30 @@ func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID s
 	if err != nil {
 		return nil, err
 	}
+
+	if err := s.repo.UpdateCandidateReviewerReviewStatus(ctx, repository.UpdateCandidateReviewerReviewStatusParams{
+		CandidateID:  candidateID,
+		ReviewerID:   employee.ID,
+		ReviewStatus: status,
+	}); err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.DeleteNotificationsBySubjectAndType(ctx, repository.DeleteNotificationsBySubjectAndTypeParams{
+		UserID:      userUUID,
+		SubjectType: model.NotificationSubjectTypeCandidate,
+		SubjectID:   candidateID,
+		EventType:   model.NotificationEventCandidateReviewerAssigned,
+	}); err != nil {
+		log.Printf(
+			"warn: failed to delete notification event=%s reviewer_user_id=%s candidate_id=%s err=%v",
+			model.NotificationEventCandidateReviewerAssigned,
+			userID,
+			id,
+			err,
+		)
+	}
+
 	return mapSubmitReviewRowToModel(row), nil
 }
 
@@ -246,7 +300,6 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		
 	}, nil
 }
 
@@ -346,7 +399,6 @@ func mapCandidateRowToModel(row repository.ListCandidatesRow) model.Candidate {
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		
 	}
 }
 
@@ -367,7 +419,6 @@ func mapAssignReviewerRowToModel(row repository.AssignReviewerRow) *model.Candid
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		
 	}
 }
 
@@ -388,6 +439,5 @@ func mapSubmitReviewRowToModel(row repository.SubmitReviewRow) *model.Candidate 
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
 		ReviewStatus:    row.ReviewStatus.String,
-		
 	}
 }

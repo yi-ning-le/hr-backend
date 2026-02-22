@@ -25,6 +25,10 @@ func main() {
 	defer db.Close()
 	log.Println("Connected to database")
 
+	if err := database.EnsureNotificationSchema(context.Background(), db); err != nil {
+		log.Fatalf("Database schema check failed: %v", err)
+	}
+
 	// 3. Initialize Server
 	srv := server.NewServer(cfg, db)
 

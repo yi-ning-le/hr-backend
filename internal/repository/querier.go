@@ -49,6 +49,8 @@ type Querier interface {
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteInactiveSessions(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
+	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
+	DeleteNotificationsBySubjectAndType(ctx context.Context, arg DeleteNotificationsBySubjectAndTypeParams) error
 	DeleteSession(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
@@ -56,6 +58,8 @@ type Querier interface {
 	GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidateRow, error)
 	GetCandidateComment(ctx context.Context, id pgtype.UUID) (CandidateComment, error)
 	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)
+	GetCandidateHistory(ctx context.Context, dollar_1 pgtype.UUID) ([]GetCandidateHistoryRow, error)
+	GetCandidateHistoryForReviewer(ctx context.Context, arg GetCandidateHistoryForReviewerParams) ([]GetCandidateHistoryForReviewerRow, error)
 	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
 	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
 	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
@@ -63,6 +67,7 @@ type Querier interface {
 	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetNotificationsByUserId(ctx context.Context, arg GetNotificationsByUserIdParams) ([]Notification, error)
+	GetPastReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]GetPastReviewedCandidatesRow, error)
 	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
 	GetUnreadNotificationCount(ctx context.Context, userID pgtype.UUID) (int64, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)
@@ -81,6 +86,7 @@ type Querier interface {
 	ListInterviews(ctx context.Context, arg ListInterviewsParams) ([]ListInterviewsRow, error)
 	ListInterviewsByInterviewer(ctx context.Context, interviewerID pgtype.UUID) ([]Interview, error)
 	ListJobs(ctx context.Context) ([]Job, error)
+	ListPendingReviewCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListPendingReviewCandidatesRow, error)
 	ListRecruiters(ctx context.Context) ([]ListRecruitersRow, error)
 	ListReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]ListReviewedCandidatesRow, error)
 	MarkAllNotificationsAsRead(ctx context.Context, userID pgtype.UUID) error
@@ -94,6 +100,7 @@ type Querier interface {
 	UpdateCandidate(ctx context.Context, arg UpdateCandidateParams) (Candidate, error)
 	UpdateCandidateResume(ctx context.Context, arg UpdateCandidateResumeParams) (Candidate, error)
 	UpdateCandidateReviewerRemovedAt(ctx context.Context, candidateID pgtype.UUID) error
+	UpdateCandidateReviewerReviewStatus(ctx context.Context, arg UpdateCandidateReviewerReviewStatusParams) error
 	UpdateCandidateStatus(ctx context.Context, arg UpdateCandidateStatusParams) (Candidate, error)
 	UpdateCandidateStatusFields(ctx context.Context, arg UpdateCandidateStatusFieldsParams) (CandidateStatus, error)
 	UpdateCandidateStatusOrder(ctx context.Context, arg UpdateCandidateStatusOrderParams) error

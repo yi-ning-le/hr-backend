@@ -102,7 +102,10 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		api.GET("/jobs", jobHandler.ListJobs)
 		api.GET("/candidates", candidateHandler.ListCandidates)
 		api.GET("/candidates/counts", candidateHandler.GetCandidateCounts)
+		api.GET("/candidates/pending", recruitmentHandler.GetPendingReviewCandidates)
+		api.GET("/candidates/reviewed", recruitmentHandler.GetPastReviewedCandidates)
 		api.GET("/candidates/:id", candidateHandler.GetCandidate)
+		api.GET("/candidates/:id/history", recruitmentHandler.GetCandidateHistory)
 		api.GET("/candidate-statuses", candidateStatusHandler.ListStatuses)
 		api.GET("/employees/me", employeeHandler.GetCurrentEmployee)
 		api.GET("/employees", employeeHandler.ListEmployees)
@@ -118,6 +121,7 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		api.GET("/notifications/unread-count", notificationHandler.GetUnreadCount)
 		api.PUT("/notifications/:id/read", notificationHandler.MarkAsRead)
 		api.PUT("/notifications/read-all", notificationHandler.MarkAllAsRead)
+		api.DELETE("/notifications/:id", notificationHandler.DeleteNotification)
 	}
 
 	// Recruiter Write Access

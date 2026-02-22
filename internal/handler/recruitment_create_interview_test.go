@@ -16,7 +16,9 @@ import (
 	"hr-backend/test/mocks"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestCreateInterview(t *testing.T) {
@@ -27,6 +29,8 @@ func TestCreateInterview(t *testing.T) {
 	jobIDStr := "33333333-3333-3333-3333-333333333333"
 
 	var candidateID, interviewerID, jobID pgtype.UUID
+	interviewIDStr := "44444444-4444-4444-4444-444444444444"
+	var interviewID pgtype.UUID
 	if err := candidateID.Scan(candidateIDStr); err != nil {
 		t.Fatalf("failed to scan candidate id: %v", err)
 	}
@@ -36,11 +40,15 @@ func TestCreateInterview(t *testing.T) {
 	if err := jobID.Scan(jobIDStr); err != nil {
 		t.Fatalf("failed to scan job id: %v", err)
 	}
+	if err := interviewID.Scan(interviewIDStr); err != nil {
+		t.Fatalf("failed to scan interview id: %v", err)
+	}
 
+	notificationCalled := false
 	mockRepo := &mocks.MockQuerier{
 		CreateInterviewFunc: func(ctx context.Context, arg repository.CreateInterviewParams) (repository.CreateInterviewRow, error) {
 			return repository.CreateInterviewRow{
-				ID:               pgtype.UUID{Valid: true},
+				ID:               interviewID,
 				CandidateID:      arg.ID,
 				InterviewerID:    arg.InterviewerID,
 				JobID:            arg.JobID,
@@ -50,6 +58,12 @@ func TestCreateInterview(t *testing.T) {
 				CreatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 				UpdatedAt:        pgtype.Timestamptz{Time: time.Now(), Valid: true},
 			}, nil
+		},
+		GetEmployeeFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			if id != interviewerID {
+				return repository.Employee{}, pgx.ErrNoRows
+			}
+			return repository.Employee{ID: interviewerID, UserID: candidateID}, nil // candidateID is just another UUID used here as mock UserID for convenience
 		},
 		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
 			return repository.GetCandidateRow{
@@ -64,6 +78,20 @@ func TestCreateInterview(t *testing.T) {
 				Slug:  slug,
 				Color: "#000000",
 			}, nil
+		},
+		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+			notificationCalled = true
+			if arg.UserID != candidateID { // using candidateID as the mock UserID
+				t.Fatalf("expected notification user id %v, got %v", candidateID, arg.UserID)
+			}
+			assert.Equal(t, model.NotificationEventInterviewAssigned, arg.EventType)
+			assert.Equal(t, model.NotificationSubjectTypeInterview, arg.SubjectType)
+			assert.Equal(t, interviewID, arg.SubjectID)
+			var contextPayload map[string]string
+			assert.NoError(t, json.Unmarshal(arg.Context, &contextPayload))
+			assert.Equal(t, candidateIDStr, contextPayload["candidateId"])
+			assert.Equal(t, interviewIDStr, contextPayload["interviewId"])
+			return repository.Notification{}, nil
 		},
 	}
 
@@ -97,6 +125,10 @@ func TestCreateInterview(t *testing.T) {
 
 	if result.CandidateID != candidateIDStr {
 		t.Errorf("expected candidateId %s, got %s", candidateIDStr, result.CandidateID)
+	}
+
+	if !notificationCalled {
+		t.Fatalf("expected CreateNotification to be called")
 	}
 }
 
