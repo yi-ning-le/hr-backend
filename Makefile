@@ -6,6 +6,7 @@
 setup:
 	@echo "Installing tools and setting up git hooks..."
 	go install github.com/evilmartians/lefthook@latest
+	go install github.com/air-verse/air@latest
 	lefthook install
 
 # 运行静态检查
@@ -23,6 +24,10 @@ generate:
 # 运行开发服务器
 run:
 	go run main.go
+
+# 使用 Air 运行支持热重载的开发服务器
+dev:
+	air -c .air.toml
 
 # 编译项目
 build:

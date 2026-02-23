@@ -57,15 +57,22 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
    export DATABASE_URL=postgres://localhost/hrdb?sslmode=disable
    ```
 
-5. Generate code from SQL queries:
+4. Generate code from SQL queries:
 
    ```bash
    sqlc generate
    ```
 
-6. Run the application:
+5. Run the application:
+
    ```bash
-   go run main.go
+   make run
+   ```
+
+   **OR for development with hot module replacement (HMR):**
+
+   ```bash
+   make dev
    ```
 
 ### API Endpoints
