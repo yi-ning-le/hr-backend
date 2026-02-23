@@ -8,6 +8,7 @@ import (
 	"os"
 	"regexp"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5"
 
@@ -41,6 +42,16 @@ func main() {
 	}
 
 	log.Println("All migrations re-applied successfully!")
+	triggerAirReload()
+}
+
+func triggerAirReload() {
+	now := time.Now().Format(time.RFC3339)
+	if err := os.WriteFile("trigger/trigger.trigger", []byte(now), 0644); err != nil {
+		log.Printf("Failed to write trigger file: %v", err)
+		return
+	}
+	log.Println("Triggered Air hot reload")
 }
 
 func rerunMigration(ctx context.Context, db *database.Database, version string) error {

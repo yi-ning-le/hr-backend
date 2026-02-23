@@ -36,16 +36,8 @@ build:
 migrate:
 	@echo "Running migration..."
 	go run cmd/migrate/main.go
-	@if [ -f tmp/air.pid ]; then \
-		echo "Triggering hot reload..."; \
-		kill -SIGUSR1 $$(cat tmp/air.pid); \
-	fi
 
 # Re-run specific migration and trigger hot reload
 remigrate file:
 	@echo "Re-running migration {{file}}..."
 	go run cmd/remigrate/main.go {{file}}
-	@if [ -f tmp/air.pid ]; then \
-		echo "Triggering hot reload..."; \
-		kill -SIGUSR1 $$(cat tmp/air.pid); \
-	fi

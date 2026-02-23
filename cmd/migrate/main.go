@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"os"
+	"time"
 
 	"hr-backend/internal/config"
 	"hr-backend/pkg/database"
@@ -96,4 +97,14 @@ func main() {
 	}
 
 	log.Println("Migration process finished!")
+	triggerAirReload()
+}
+
+func triggerAirReload() {
+	now := time.Now().Format(time.RFC3339)
+	if err := os.WriteFile("trigger/trigger.trigger", []byte(now), 0644); err != nil {
+		log.Printf("Failed to write trigger file: %v", err)
+		return
+	}
+	log.Println("Triggered Air hot reload")
 }
