@@ -376,3 +376,127 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 		t.Fatalf("unexpected call order: %v", callOrder)
 	}
 }
+
+func TestSubmitReview_CreateCommentFailure_ReturnsErrorAndSkipsNotification(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	reviewerUserIDStr := "00000000-0000-0000-0000-000000000002"
+	reviewerEmployeeIDStr := "00000000-0000-0000-0000-000000000003"
+	recruiterUserIDStr := "00000000-0000-0000-0000-000000000004"
+
+	var candidateID, reviewerUserID, reviewerEmployeeID, recruiterUserID pgtype.UUID
+	assert.NoError(t, candidateID.Scan(candidateIDStr))
+	assert.NoError(t, reviewerUserID.Scan(reviewerUserIDStr))
+	assert.NoError(t, reviewerEmployeeID.Scan(reviewerEmployeeIDStr))
+	assert.NoError(t, recruiterUserID.Scan(recruiterUserIDStr))
+
+	createNotificationCalled := false
+	expectedErr := errors.New("insert comment failed")
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:        reviewerEmployeeID,
+				UserID:    reviewerUserID,
+				FirstName: "Alice",
+				LastName:  "Lee",
+			}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:         candidateID,
+				ReviewerID: reviewerEmployeeID,
+			}, nil
+		},
+		GetReviewerAssignmentFunc: func(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				CandidateID:      candidateID,
+				ReviewerID:       reviewerEmployeeID,
+				AssignedByUserID: recruiterUserID,
+			}, nil
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			return repository.SubmitReviewRow{ID: candidateID}, nil
+		},
+		CreateCandidateCommentFunc: func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+			return repository.CandidateComment{}, expectedErr
+		},
+		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+			createNotificationCalled = true
+			return repository.Notification{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(
+		context.Background(),
+		candidateIDStr,
+		reviewerUserIDStr,
+		"suitable",
+		"Strong fit",
+	)
+	assert.ErrorIs(t, err, expectedErr)
+	assert.False(t, createNotificationCalled)
+}
+
+func TestSubmitReview_PendingSkipsDecisionCommentAndNotification(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	reviewerUserIDStr := "00000000-0000-0000-0000-000000000002"
+	reviewerEmployeeIDStr := "00000000-0000-0000-0000-000000000003"
+	recruiterUserIDStr := "00000000-0000-0000-0000-000000000004"
+
+	var candidateID, reviewerUserID, reviewerEmployeeID, recruiterUserID pgtype.UUID
+	assert.NoError(t, candidateID.Scan(candidateIDStr))
+	assert.NoError(t, reviewerUserID.Scan(reviewerUserIDStr))
+	assert.NoError(t, reviewerEmployeeID.Scan(reviewerEmployeeIDStr))
+	assert.NoError(t, recruiterUserID.Scan(recruiterUserIDStr))
+
+	createNotificationCalled := false
+	createdComments := make([]repository.CreateCandidateCommentParams, 0, 2)
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:        reviewerEmployeeID,
+				UserID:    reviewerUserID,
+				FirstName: "Alice",
+				LastName:  "Lee",
+			}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:         candidateID,
+				ReviewerID: reviewerEmployeeID,
+			}, nil
+		},
+		GetReviewerAssignmentFunc: func(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				CandidateID:      candidateID,
+				ReviewerID:       reviewerEmployeeID,
+				AssignedByUserID: recruiterUserID,
+			}, nil
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			return repository.SubmitReviewRow{ID: candidateID}, nil
+		},
+		CreateCandidateCommentFunc: func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+			createdComments = append(createdComments, arg)
+			return repository.CandidateComment{}, nil
+		},
+		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+			createNotificationCalled = true
+			return repository.Notification{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(
+		context.Background(),
+		candidateIDStr,
+		reviewerUserIDStr,
+		"pending",
+		"Need follow-up",
+	)
+	assert.NoError(t, err)
+	assert.Len(t, createdComments, 1)
+	assert.Equal(t, "normal", createdComments[0].CommentType)
+	assert.Equal(t, "Need follow-up", createdComments[0].Content)
+	assert.False(t, createNotificationCalled)
+}
