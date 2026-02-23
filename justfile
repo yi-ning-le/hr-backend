@@ -19,6 +19,10 @@ lint:
 test:
 	go test -v ./...
 
+# Run single test
+test-one pkg test:
+	go test -v ./{{pkg}} -run '{{test}}'
+
 # Generate SQLC code
 generate:
 	sqlc generate

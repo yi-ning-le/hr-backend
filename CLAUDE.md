@@ -9,7 +9,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Run Migrations**: `just migrate` (Runs migrations and triggers hot reload if Air is running)
 - **Re-run Specific Migration**: `just remigrate <migration_file.sql>` (Drops tables, removes record, re-applies, triggers hot reload)
 - **Run Tests**: `just test`
-- **Run Single Test**: `go test -v ./path/to/pkg -run TestName`
+- **Run Single Test**: `just test-one ./path/to/pkg TestName`
 - **Generate SQL**: `just generate` (Run after modifying SQL in `migrations/` or `internal/repository/query/`)
 - **Install Tools & Git Hooks**: `just setup`
 - **Lint**: `just lint`
