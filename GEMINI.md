@@ -63,7 +63,19 @@ The application relies on environment variables for configuration. Defaults are 
     just dev
     ```
 
-4.  **Run Tests:**
+4.  **Run Database Migrations:**
+
+    ```bash
+    just migrate
+    ```
+
+5.  **Re-run Specific Migration:**
+
+    ```bash
+    just remigrate <migration_file.sql>
+    ```
+
+6.  **Run Tests:**
     ```bash
     just test
     ```
@@ -71,6 +83,7 @@ The application relies on environment variables for configuration. Defaults are 
 ## Development Status & Conventions
 
 - **Current State:** The project structure is scaffolded, and the database layer (migrations + sqlc) is set up. However, `main.go` is currently a placeholder and does not yet fully integrate the `config`, `database`, and `handler` packages.
+- **Migrations:** Use `just migrate` to run migrations or `just remigrate <file>` to re-run a specific migration. Both commands trigger hot reload if Air is running.
 - **Database Access:** Do not write raw SQL in handlers or services. Add queries to `internal/repository/query/*.sql`, run `just generate`, and use the generated methods in `internal/repository/`.
 - **Dependency Injection:** The application aims to use dependency injection (manual wiring in `main.go`) to inject the repository/DB pool into services, and services into handlers.
 - **Error Handling:** Use standard Go error handling.

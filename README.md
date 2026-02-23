@@ -79,11 +79,23 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 ### Database Changes
 
 1. Update SQL schema in `migrations/`
-2. Update SQL queries in `internal/repository/query/`
-3. Generate Go code:
+2. Run migrations:
+   ```bash
+   just migrate
+   ```
+3. Update SQL queries in `internal/repository/query/`
+4. Generate Go code:
    ```bash
    sqlc generate
    ```
+
+To re-run a specific migration (drops tables, removes record, re-applies):
+
+```bash
+just remigrate <migration_file.sql>
+```
+
+Both `migrate` and `remigrate` commands trigger hot reload if Air is running.
 
 ### Running Tests
 

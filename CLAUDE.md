@@ -6,8 +6,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 - **Build API**: `just build` (Outputs to `bin/server`)
 - **Run API (Dev)**: `just dev` (with hot module replacement)
-- **Run Migrations**: `go run cmd/migrate/main.go` (Runs custom migration script using `migrations/*.sql`)
-- **Re-run Specific Migration**: `go run cmd/remigrate/main.go <migration_file.sql>` (Deletes tables in migration, removes migration record, then re-applies)
+- **Run Migrations**: `just migrate` (Runs migrations and triggers hot reload if Air is running)
+- **Re-run Specific Migration**: `just remigrate <migration_file.sql>` (Drops tables, removes record, re-applies, triggers hot reload)
 - **Run Tests**: `just test`
 - **Run Single Test**: `go test -v ./path/to/pkg -run TestName`
 - **Generate SQL**: `just generate` (Run after modifying SQL in `migrations/` or `internal/repository/query/`)

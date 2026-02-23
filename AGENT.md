@@ -34,7 +34,11 @@ The following specialized skills are relevant to this project and should be util
 ### 2. Database Interactions
 
 - **Tool:** Use `sqlc` for all database interactions.
-- **Workflow:**
+- **Migrations:**
+  - Run `just migrate` to apply pending migrations.
+  - Run `just remigrate <file.sql>` to re-run a specific migration.
+  - Both commands trigger hot reload if Air is running.
+- **Query Generation:**
   1.  Write raw SQL in `internal/repository/query/*.sql`.
   2.  Run `just generate`.
   3.  Use generated Go code in services.
