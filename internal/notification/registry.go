@@ -23,6 +23,12 @@ type InterviewAssignedPayload struct {
 	CandidateID string `json:"candidateId"`
 }
 
+type ReviewCompletedPayload struct {
+	CandidateID  string `json:"candidateId"`
+	ReviewStatus string `json:"reviewStatus"`
+	ReviewerName string `json:"reviewerName"`
+}
+
 func ValidatePayload(eventType, subjectType string, payload any) error {
 	switch eventType {
 	case model.NotificationEventCandidateReviewerAssigned:
@@ -47,6 +53,18 @@ func ValidatePayload(eventType, subjectType string, payload any) error {
 		}
 		if p.InterviewID == "" {
 			return fmt.Errorf("%w: interviewId is required", ErrInvalidContext)
+		}
+		if p.CandidateID == "" {
+			return fmt.Errorf("%w: candidateId is required", ErrInvalidContext)
+		}
+		return nil
+	case model.NotificationEventReviewCompleted:
+		if subjectType != model.NotificationSubjectTypeCandidate {
+			return fmt.Errorf("%w: expected %s got %s", ErrInvalidSubjectType, model.NotificationSubjectTypeCandidate, subjectType)
+		}
+		p, ok := payload.(ReviewCompletedPayload)
+		if !ok {
+			return fmt.Errorf("%w: review completed payload type mismatch", ErrInvalidContext)
 		}
 		if p.CandidateID == "" {
 			return fmt.Errorf("%w: candidateId is required", ErrInvalidContext)
@@ -92,6 +110,23 @@ func BuildPresentation(eventType, subjectID string, context map[string]any) (mod
 		return content, &model.NotificationAction{
 			Kind:   "interviewDetail",
 			Params: map[string]any{"interviewId": interviewID},
+		}
+	case model.NotificationEventReviewCompleted:
+		content := model.NotificationContent{
+			TitleKey:   "notifications.events.review_completed.title",
+			MessageKey: "notifications.events.review_completed.message",
+		}
+		if len(context) > 0 {
+			content.Params = context
+		}
+		candidateID := subjectID
+		var payload ReviewCompletedPayload
+		if err := decodeContext(context, &payload); err == nil && payload.CandidateID != "" {
+			candidateID = payload.CandidateID
+		}
+		return content, &model.NotificationAction{
+			Kind:   "candidateReview",
+			Params: map[string]any{"candidateId": candidateID},
 		}
 	default:
 		return model.NotificationContent{

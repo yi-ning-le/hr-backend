@@ -91,6 +91,7 @@ type MockQuerier struct {
 	// Candidate Reviewer mock functions
 	CountCandidateReviewerAssignmentsFunc   func(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
 	IsCandidateReviewerFunc                 func(ctx context.Context, arg repository.IsCandidateReviewerParams) (pgtype.UUID, error)
+	GetReviewerAssignmentFunc               func(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error)
 	InsertCandidateReviewerFunc             func(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error)
 	UpdateCandidateReviewerRemovedAtFunc    func(ctx context.Context, candidateID pgtype.UUID) error
 	UpdateCandidateReviewerReviewStatusFunc func(ctx context.Context, arg repository.UpdateCandidateReviewerReviewStatusParams) error
@@ -480,6 +481,13 @@ func (m *MockQuerier) IsCandidateReviewer(ctx context.Context, arg repository.Is
 		return m.IsCandidateReviewerFunc(ctx, arg)
 	}
 	return pgtype.UUID{}, nil
+}
+
+func (m *MockQuerier) GetReviewerAssignment(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error) {
+	if m.GetReviewerAssignmentFunc != nil {
+		return m.GetReviewerAssignmentFunc(ctx, arg)
+	}
+	return repository.CandidateReviewer{}, nil
 }
 
 func (m *MockQuerier) InsertCandidateReviewer(ctx context.Context, arg repository.InsertCandidateReviewerParams) (repository.CandidateReviewer, error) {

@@ -49,6 +49,10 @@ func TestAssignReviewerHandler_realUUID(t *testing.T) {
 	h := handler.NewCandidateHandler(svc)
 
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "00000000-0000-0000-0000-00000000000a")
+		c.Next()
+	})
 	r.POST("/candidates/:id/assign-reviewer", h.AssignReviewer)
 
 	reqBody := map[string]string{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -20,6 +21,7 @@ type CandidateCommentService struct {
 var (
 	ErrCommentNotFound     = errors.New("comment not found")
 	ErrDeleteCommentNoPerm = errors.New("you do not have permission to delete this comment")
+	ErrInvalidCommentType  = errors.New("invalid comment type")
 )
 
 func NewCandidateCommentService(repo repository.Querier) *CandidateCommentService {
@@ -52,6 +54,7 @@ func (s *CandidateCommentService) ListComments(ctx context.Context, candidateID 
 			AuthorAvatar: row.AuthorAvatar.String,
 			AuthorRole:   row.AuthorRole,
 			Content:      row.Content,
+			CommentType:  row.CommentType,
 			CreatedAt:    row.CreatedAt.Time,
 		}
 	}
@@ -59,7 +62,13 @@ func (s *CandidateCommentService) ListComments(ctx context.Context, candidateID 
 	return comments, nil
 }
 
-func (s *CandidateCommentService) CreateComment(ctx context.Context, candidateID string, employeeID string, content string) (*model.CandidateComment, error) {
+func (s *CandidateCommentService) CreateComment(
+	ctx context.Context,
+	candidateID string,
+	employeeID string,
+	content string,
+	commentType string,
+) (*model.CandidateComment, error) {
 	candUUID, err := utils.StringToUUID(candidateID)
 	if err != nil {
 		return nil, err
@@ -70,10 +79,16 @@ func (s *CandidateCommentService) CreateComment(ctx context.Context, candidateID
 		return nil, err
 	}
 
+	normalizedCommentType, err := normalizeCommentType(commentType)
+	if err != nil {
+		return nil, err
+	}
+
 	params := repository.CreateCandidateCommentParams{
 		CandidateID: candUUID,
 		AuthorID:    empUUID,
 		Content:     content,
+		CommentType: normalizedCommentType,
 	}
 
 	created, err := s.repo.CreateCandidateComment(ctx, params)
@@ -106,8 +121,23 @@ func (s *CandidateCommentService) CreateComment(ctx context.Context, candidateID
 		AuthorAvatar: user.Avatar.String,
 		AuthorRole:   authorRole,
 		Content:      created.Content,
+		CommentType:  created.CommentType,
 		CreatedAt:    created.CreatedAt.Time,
 	}, nil
+}
+
+func normalizeCommentType(commentType string) (string, error) {
+	normalized := strings.TrimSpace(strings.ToLower(commentType))
+	if normalized == "" {
+		return "normal", nil
+	}
+
+	switch normalized {
+	case "normal", "review_suitable", "review_unsuitable":
+		return normalized, nil
+	default:
+		return "", ErrInvalidCommentType
+	}
 }
 
 func (s *CandidateCommentService) DeleteComment(ctx context.Context, commentID string, userID string, employeeID string) error {

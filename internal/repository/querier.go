@@ -68,6 +68,7 @@ type Querier interface {
 	GetJob(ctx context.Context, id pgtype.UUID) (Job, error)
 	GetNotificationsByUserId(ctx context.Context, arg GetNotificationsByUserIdParams) ([]Notification, error)
 	GetPastReviewedCandidates(ctx context.Context, reviewerID pgtype.UUID) ([]GetPastReviewedCandidatesRow, error)
+	GetReviewerAssignment(ctx context.Context, arg GetReviewerAssignmentParams) (CandidateReviewer, error)
 	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
 	GetUnreadNotificationCount(ctx context.Context, userID pgtype.UUID) (int64, error)
 	GetUserByID(ctx context.Context, id pgtype.UUID) (User, error)

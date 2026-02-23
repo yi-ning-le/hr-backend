@@ -51,8 +51,12 @@ func (h *CandidateCommentHandler) CreateComment(c *gin.Context) {
 		return
 	}
 
-	comment, err := h.service.CreateComment(c.Request.Context(), id, employeeID.(string), input.Content)
+	comment, err := h.service.CreateComment(c.Request.Context(), id, employeeID.(string), input.Content, input.CommentType)
 	if err != nil {
+		if errors.Is(err, service.ErrInvalidCommentType) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "commentType must be one of: normal, review_suitable, review_unsuitable"})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}

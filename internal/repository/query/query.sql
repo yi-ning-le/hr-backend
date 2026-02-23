@@ -436,9 +436,9 @@ ORDER BY e.first_name;
 
 -- name: CreateCandidateComment :one
 INSERT INTO candidate_comments (
-    candidate_id, author_id, content
+    candidate_id, author_id, content, comment_type
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4
 )
 RETURNING *;
 
@@ -480,14 +480,23 @@ WHERE candidate_id = $1
 LIMIT 1;
 
 -- name: InsertCandidateReviewer :one
-INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
-VALUES ($1, $2)
+INSERT INTO candidate_reviewers (candidate_id, reviewer_id, assigned_by_user_id)
+VALUES ($1, $2, $3)
 ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET
   assigned_at = CURRENT_TIMESTAMP,
   removed_at = NULL,
+  assigned_by_user_id = EXCLUDED.assigned_by_user_id,
   review_status = 'pending',
   reviewed_at = NULL
 RETURNING *;
+
+-- name: GetReviewerAssignment :one
+SELECT *
+FROM candidate_reviewers
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL
+LIMIT 1;
 
 -- name: UpdateCandidateReviewerRemovedAt :exec
 UPDATE candidate_reviewers

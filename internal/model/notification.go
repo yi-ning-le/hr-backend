@@ -6,6 +6,7 @@ import "time"
 const (
 	NotificationEventCandidateReviewerAssigned = "candidate_reviewer_assigned"
 	NotificationEventInterviewAssigned         = "interview_assigned"
+	NotificationEventReviewCompleted           = "review_completed"
 )
 
 const (

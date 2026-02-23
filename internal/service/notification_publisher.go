@@ -58,6 +58,46 @@ func (p *NotificationPublisher) PublishInterviewAssigned(
 	)
 }
 
+func (p *NotificationPublisher) PublishReviewCompleted(
+	ctx context.Context,
+	recruiterUserID pgtype.UUID,
+	candidateID pgtype.UUID,
+	reviewStatus string,
+	reviewerName string,
+) error {
+	if err := notification.ValidatePayload(
+		model.NotificationEventReviewCompleted,
+		model.NotificationSubjectTypeCandidate,
+		notification.ReviewCompletedPayload{
+			CandidateID:  utils.UUIDToString(candidateID),
+			ReviewStatus: reviewStatus,
+			ReviewerName: reviewerName,
+		},
+	); err != nil {
+		return err
+	}
+
+	payload := notification.ReviewCompletedPayload{
+		CandidateID:  utils.UUIDToString(candidateID),
+		ReviewStatus: reviewStatus,
+		ReviewerName: reviewerName,
+	}
+
+	contextJSON, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	_, err = p.repo.CreateNotification(ctx, repository.CreateNotificationParams{
+		UserID:      recruiterUserID,
+		EventType:   model.NotificationEventReviewCompleted,
+		SubjectType: model.NotificationSubjectTypeCandidate,
+		SubjectID:   candidateID,
+		Context:     contextJSON,
+	})
+	return err
+}
+
 func (p *NotificationPublisher) publishToEmployee(
 	ctx context.Context,
 	employeeID pgtype.UUID,

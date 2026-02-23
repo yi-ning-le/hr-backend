@@ -179,11 +179,13 @@ type CandidateComment struct {
 	AuthorAvatar string    `json:"authorAvatar,omitempty"`
 	AuthorRole   string    `json:"authorRole"` // HR | INTERVIEWER
 	Content      string    `json:"content"`
+	CommentType  string    `json:"commentType,omitempty"` // normal | review_suitable | review_unsuitable
 	CreatedAt    time.Time `json:"createdAt"`
 }
 
 type CreateCommentInput struct {
-	Content string `json:"content" binding:"required"`
+	Content     string `json:"content" binding:"required"`
+	CommentType string `json:"commentType,omitempty"`
 }
 
 type SessionInfo struct {

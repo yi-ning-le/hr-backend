@@ -72,15 +72,20 @@ func TestCandidateCommentHandler_CreateComment(t *testing.T) {
 	}, h.CreateComment)
 
 	candidateID := "00000000-0000-0000-0000-000000000001"
-	input := model.CreateCommentInput{Content: "New comment"}
+	input := model.CreateCommentInput{
+		Content:     "New comment",
+		CommentType: "review_unsuitable",
+	}
 	body, _ := json.Marshal(input)
 
 	mockRepo.CreateCandidateCommentFunc = func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+		assert.Equal(t, "review_unsuitable", arg.CommentType)
 		return repository.CandidateComment{
 			ID:          pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
 			CandidateID: arg.CandidateID,
 			AuthorID:    arg.AuthorID,
 			Content:     arg.Content,
+			CommentType: arg.CommentType,
 			CreatedAt:   pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		}, nil
 	}
@@ -109,4 +114,30 @@ func TestCandidateCommentHandler_CreateComment(t *testing.T) {
 	r.ServeHTTP(w, req)
 
 	assert.Equal(t, http.StatusCreated, w.Code)
+}
+
+func TestCandidateCommentHandler_CreateComment_InvalidCommentType(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	mockRepo := &mocks.MockQuerier{}
+	svc := service.NewCandidateCommentService(mockRepo)
+	h := NewCandidateCommentHandler(svc)
+
+	r := gin.Default()
+	r.POST("/candidates/:candidateId/comments", func(c *gin.Context) {
+		c.Set("employeeID", "00000000-0000-0000-0000-000000000002")
+		c.Next()
+	}, h.CreateComment)
+
+	candidateID := "00000000-0000-0000-0000-000000000001"
+	input := model.CreateCommentInput{
+		Content:     "New comment",
+		CommentType: "not_valid",
+	}
+	body, _ := json.Marshal(input)
+
+	w := httptest.NewRecorder()
+	req, _ := http.NewRequest("POST", "/candidates/"+candidateID+"/comments", bytes.NewBuffer(body))
+	r.ServeHTTP(w, req)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

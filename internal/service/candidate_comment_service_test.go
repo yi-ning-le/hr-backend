@@ -28,6 +28,7 @@ func TestListComments(t *testing.T) {
 				CandidateID:  candUUID,
 				AuthorID:     pgtype.UUID{Bytes: [16]byte{2}, Valid: true},
 				Content:      "Test comment",
+				CommentType:  "review_suitable",
 				CreatedAt:    pgtype.Timestamptz{Time: time.Now(), Valid: true},
 				AuthorName:   "John Doe",
 				AuthorAvatar: pgtype.Text{String: "avatar.png", Valid: true},
@@ -42,6 +43,7 @@ func TestListComments(t *testing.T) {
 	assert.Equal(t, "Test comment", comments[0].Content)
 	assert.Equal(t, "John Doe", comments[0].AuthorName)
 	assert.Equal(t, "HR", comments[0].AuthorRole)
+	assert.Equal(t, "review_suitable", comments[0].CommentType)
 }
 
 func TestCreateComment(t *testing.T) {
@@ -54,11 +56,13 @@ func TestCreateComment(t *testing.T) {
 	content := "New comment"
 
 	mockRepo.CreateCandidateCommentFunc = func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+		assert.Equal(t, "review_suitable", arg.CommentType)
 		return repository.CandidateComment{
 			ID:          pgtype.UUID{Bytes: [16]byte{1}, Valid: true},
 			CandidateID: arg.CandidateID,
 			AuthorID:    arg.AuthorID,
 			Content:     arg.Content,
+			CommentType: arg.CommentType,
 			CreatedAt:   pgtype.Timestamptz{Time: time.Now(), Valid: true},
 		}, nil
 	}
@@ -86,12 +90,27 @@ func TestCreateComment(t *testing.T) {
 		return pgtype.UUID{}, errors.New("not recruiter")
 	}
 
-	comment, err := s.CreateComment(context.Background(), candidateID, employeeID, content)
+	comment, err := s.CreateComment(context.Background(), candidateID, employeeID, content, "review_suitable")
 	assert.NoError(t, err)
 	assert.NotNil(t, comment)
 	assert.Equal(t, content, comment.Content)
 	assert.Equal(t, "John Doe", comment.AuthorName)
 	assert.Equal(t, "HR", comment.AuthorRole)
+	assert.Equal(t, "review_suitable", comment.CommentType)
+}
+
+func TestCreateComment_InvalidCommentType(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{}
+	s := NewCandidateCommentService(mockRepo)
+
+	_, err := s.CreateComment(
+		context.Background(),
+		"00000000-0000-0000-0000-000000000001",
+		"00000000-0000-0000-0000-000000000002",
+		"invalid",
+		"wrong_type",
+	)
+	assert.ErrorIs(t, err, ErrInvalidCommentType)
 }
 
 func TestDeleteComment(t *testing.T) {

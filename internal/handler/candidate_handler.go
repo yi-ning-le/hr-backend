@@ -119,7 +119,18 @@ func (h *CandidateHandler) AssignReviewer(c *gin.Context) {
 		return
 	}
 
-	candidate, err := h.service.AssignReviewer(c.Request.Context(), id, req.ReviewerID)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+	userIDStr, ok := userID.(string)
+	if !ok || userIDStr == "" {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	candidate, err := h.service.AssignReviewer(c.Request.Context(), id, req.ReviewerID, userIDStr)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
@@ -131,6 +142,8 @@ func (h *CandidateHandler) SubmitReview(c *gin.Context) {
 	id := c.Param("id")
 	var req struct {
 		ReviewStatus string `json:"reviewStatus" binding:"required"`
+		Comment      string `json:"comment"`
+		ReviewNote   string `json:"reviewNote"` // Legacy alias for backward compatibility.
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -156,11 +169,17 @@ func (h *CandidateHandler) SubmitReview(c *gin.Context) {
 		return
 	}
 
+	comment := strings.TrimSpace(req.Comment)
+	if comment == "" {
+		comment = strings.TrimSpace(req.ReviewNote)
+	}
+
 	candidate, err := h.service.SubmitReview(
 		c.Request.Context(),
 		id,
 		userIDStr,
 		reviewStatus,
+		comment,
 	)
 	if err != nil {
 		if errors.Is(err, service.ErrReviewPermissionDenied) {

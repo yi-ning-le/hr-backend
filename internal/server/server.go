@@ -36,7 +36,7 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 	// Initialize Services
 	authService := service.NewAuthService(repo, cfg.JWTSecret, db.Pool)
 	jobService := service.NewJobService(repo)
-	candidateService := service.NewCandidateService(repo)
+	candidateService := service.NewCandidateService(repo, db.Pool)
 	employeeService := service.NewEmployeeService(repo, db.Pool)
 	candidateStatusService := service.NewCandidateStatusService(repo)
 	candidateCommentService := service.NewCandidateCommentService(repo)

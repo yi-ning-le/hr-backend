@@ -153,6 +153,9 @@ func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
 				ReviewerID: assignedReviewerID,
 			}, nil
 		},
+		GetReviewerAssignmentFunc: func(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{}, pgx.ErrNoRows
+		},
 		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
 			submitCalled = true
 			return repository.SubmitReviewRow{}, nil
@@ -160,7 +163,7 @@ func TestSubmitReview_OnlyAssignedReviewer(t *testing.T) {
 	}
 
 	svc := service.NewCandidateService(mockRepo)
-	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable")
+	_, err := svc.SubmitReview(context.Background(), candidateIDStr, userIDStr, "suitable", "")
 	if !errors.Is(err, service.ErrReviewPermissionDenied) {
 		t.Fatalf("expected ErrReviewPermissionDenied, got %v", err)
 	}
@@ -182,6 +185,7 @@ func TestSubmitReview_ReviewerProfileNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
+		"",
 	)
 
 	if !errors.Is(err, service.ErrReviewerProfileNotFound) {
@@ -210,6 +214,7 @@ func TestSubmitReview_CandidateNotFound(t *testing.T) {
 		"00000000-0000-0000-0000-000000000001",
 		"00000000-0000-0000-0000-000000000002",
 		"suitable",
+		"",
 	)
 
 	if !errors.Is(err, service.ErrCandidateNotFound) {
@@ -217,16 +222,98 @@ func TestSubmitReview_CandidateNotFound(t *testing.T) {
 	}
 }
 
+func TestSubmitReview_PublishesReviewCompletedToRecruiter(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	reviewerUserIDStr := "00000000-0000-0000-0000-000000000002"
+	reviewerEmployeeIDStr := "00000000-0000-0000-0000-000000000003"
+	recruiterUserIDStr := "00000000-0000-0000-0000-000000000004"
+
+	var candidateID, reviewerUserID, reviewerEmployeeID, recruiterUserID pgtype.UUID
+	assert.NoError(t, candidateID.Scan(candidateIDStr))
+	assert.NoError(t, reviewerUserID.Scan(reviewerUserIDStr))
+	assert.NoError(t, reviewerEmployeeID.Scan(reviewerEmployeeIDStr))
+	assert.NoError(t, recruiterUserID.Scan(recruiterUserIDStr))
+
+	createNotificationCalled := false
+	createdComments := make([]repository.CreateCandidateCommentParams, 0, 2)
+	mockRepo := &mocks.MockQuerier{
+		GetEmployeeByUserIDFunc: func(ctx context.Context, id pgtype.UUID) (repository.Employee, error) {
+			return repository.Employee{
+				ID:        reviewerEmployeeID,
+				UserID:    reviewerUserID,
+				FirstName: "Alice",
+				LastName:  "Lee",
+			}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:         candidateID,
+				ReviewerID: reviewerEmployeeID,
+			}, nil
+		},
+		GetReviewerAssignmentFunc: func(ctx context.Context, arg repository.GetReviewerAssignmentParams) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				CandidateID:      candidateID,
+				ReviewerID:       reviewerEmployeeID,
+				AssignedByUserID: recruiterUserID,
+			}, nil
+		},
+		SubmitReviewFunc: func(ctx context.Context, arg repository.SubmitReviewParams) (repository.SubmitReviewRow, error) {
+			return repository.SubmitReviewRow{
+				ID: candidateID,
+			}, nil
+		},
+		CreateCandidateCommentFunc: func(ctx context.Context, arg repository.CreateCandidateCommentParams) (repository.CandidateComment, error) {
+			createdComments = append(createdComments, arg)
+			return repository.CandidateComment{}, nil
+		},
+		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
+			createNotificationCalled = true
+			assert.Equal(t, recruiterUserID, arg.UserID)
+			assert.Equal(t, model.NotificationEventReviewCompleted, arg.EventType)
+			assert.Equal(t, model.NotificationSubjectTypeCandidate, arg.SubjectType)
+			assert.Equal(t, candidateID, arg.SubjectID)
+
+			var payload map[string]string
+			assert.NoError(t, json.Unmarshal(arg.Context, &payload))
+			assert.Equal(t, candidateIDStr, payload["candidateId"])
+			assert.Equal(t, "suitable", payload["reviewStatus"])
+			assert.Equal(t, "Alice Lee", payload["reviewerName"])
+			return repository.Notification{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.SubmitReview(
+		context.Background(),
+		candidateIDStr,
+		reviewerUserIDStr,
+		"suitable",
+		"Strong fit",
+	)
+	assert.NoError(t, err)
+	assert.Len(t, createdComments, 2)
+	assert.Equal(t, "Strong fit", createdComments[0].Content)
+	assert.Equal(t, "normal", createdComments[0].CommentType)
+	assert.Equal(t, "suitable", createdComments[1].Content)
+	assert.Equal(t, "review_suitable", createdComments[1].CommentType)
+	assert.True(t, createNotificationCalled)
+}
+
 func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 	candidateIDStr := "00000000-0000-0000-0000-000000000001"
 	reviewerIDStr := "00000000-0000-0000-0000-000000000002"
+	assignedByUserIDStr := "00000000-0000-0000-0000-00000000000a"
 
-	var candidateID, reviewerID pgtype.UUID
+	var candidateID, reviewerID, assignedByUserID pgtype.UUID
 	if err := candidateID.Scan(candidateIDStr); err != nil {
 		t.Fatalf("failed to scan candidate id: %v", err)
 	}
 	if err := reviewerID.Scan(reviewerIDStr); err != nil {
 		t.Fatalf("failed to scan reviewer id: %v", err)
+	}
+	if err := assignedByUserID.Scan(assignedByUserIDStr); err != nil {
+		t.Fatalf("failed to scan assigned-by user id: %v", err)
 	}
 
 	callOrder := make([]string, 0, 3)
@@ -259,6 +346,9 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 			if arg.ReviewerID != reviewerID {
 				t.Fatalf("expected reviewer id %v, got %v", reviewerID, arg.ReviewerID)
 			}
+			if arg.AssignedByUserID != assignedByUserID {
+				t.Fatalf("expected assigned_by_user_id %v, got %v", assignedByUserID, arg.AssignedByUserID)
+			}
 			return repository.CandidateReviewer{}, nil
 		},
 		CreateNotificationFunc: func(ctx context.Context, arg repository.CreateNotificationParams) (repository.Notification, error) {
@@ -277,7 +367,7 @@ func TestAssignReviewer_ReplacesActiveAssignment(t *testing.T) {
 	}
 
 	svc := service.NewCandidateService(mockRepo)
-	_, err := svc.AssignReviewer(context.Background(), candidateIDStr, reviewerIDStr)
+	_, err := svc.AssignReviewer(context.Background(), candidateIDStr, reviewerIDStr, assignedByUserIDStr)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

@@ -328,22 +328,28 @@ func (q *Queries) CreateCandidate(ctx context.Context, arg CreateCandidateParams
 const createCandidateComment = `-- name: CreateCandidateComment :one
 
 INSERT INTO candidate_comments (
-    candidate_id, author_id, content
+    candidate_id, author_id, content, comment_type
 ) VALUES (
-    $1, $2, $3
+    $1, $2, $3, $4
 )
-RETURNING id, candidate_id, author_id, content, created_at
+RETURNING id, candidate_id, author_id, content, created_at, comment_type
 `
 
 type CreateCandidateCommentParams struct {
 	CandidateID pgtype.UUID `json:"candidate_id"`
 	AuthorID    pgtype.UUID `json:"author_id"`
 	Content     string      `json:"content"`
+	CommentType string      `json:"comment_type"`
 }
 
 // Candidate Comment queries
 func (q *Queries) CreateCandidateComment(ctx context.Context, arg CreateCandidateCommentParams) (CandidateComment, error) {
-	row := q.db.QueryRow(ctx, createCandidateComment, arg.CandidateID, arg.AuthorID, arg.Content)
+	row := q.db.QueryRow(ctx, createCandidateComment,
+		arg.CandidateID,
+		arg.AuthorID,
+		arg.Content,
+		arg.CommentType,
+	)
 	var i CandidateComment
 	err := row.Scan(
 		&i.ID,
@@ -351,6 +357,7 @@ func (q *Queries) CreateCandidateComment(ctx context.Context, arg CreateCandidat
 		&i.AuthorID,
 		&i.Content,
 		&i.CreatedAt,
+		&i.CommentType,
 	)
 	return i, err
 }
@@ -859,7 +866,7 @@ func (q *Queries) GetCandidate(ctx context.Context, id pgtype.UUID) (GetCandidat
 }
 
 const getCandidateComment = `-- name: GetCandidateComment :one
-SELECT id, candidate_id, author_id, content, created_at FROM candidate_comments WHERE id = $1 LIMIT 1
+SELECT id, candidate_id, author_id, content, created_at, comment_type FROM candidate_comments WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetCandidateComment(ctx context.Context, id pgtype.UUID) (CandidateComment, error) {
@@ -871,6 +878,7 @@ func (q *Queries) GetCandidateComment(ctx context.Context, id pgtype.UUID) (Cand
 		&i.AuthorID,
 		&i.Content,
 		&i.CreatedAt,
+		&i.CommentType,
 	)
 	return i, err
 }
@@ -1259,6 +1267,37 @@ func (q *Queries) GetPastReviewedCandidates(ctx context.Context, reviewerID pgty
 	return items, nil
 }
 
+const getReviewerAssignment = `-- name: GetReviewerAssignment :one
+SELECT id, candidate_id, reviewer_id, assigned_at, removed_at, created_at, review_status, reviewed_at, assigned_by_user_id
+FROM candidate_reviewers
+WHERE candidate_id = $1
+  AND reviewer_id = $2
+  AND removed_at IS NULL
+LIMIT 1
+`
+
+type GetReviewerAssignmentParams struct {
+	CandidateID pgtype.UUID `json:"candidate_id"`
+	ReviewerID  pgtype.UUID `json:"reviewer_id"`
+}
+
+func (q *Queries) GetReviewerAssignment(ctx context.Context, arg GetReviewerAssignmentParams) (CandidateReviewer, error) {
+	row := q.db.QueryRow(ctx, getReviewerAssignment, arg.CandidateID, arg.ReviewerID)
+	var i CandidateReviewer
+	err := row.Scan(
+		&i.ID,
+		&i.CandidateID,
+		&i.ReviewerID,
+		&i.AssignedAt,
+		&i.RemovedAt,
+		&i.CreatedAt,
+		&i.ReviewStatus,
+		&i.ReviewedAt,
+		&i.AssignedByUserID,
+	)
+	return i, err
+}
+
 const getSessionByID = `-- name: GetSessionByID :one
 SELECT id, user_id, device_info, ip_address, user_agent, created_at, expires_at, is_active, last_active_at FROM sessions WHERE id = $1 LIMIT 1
 `
@@ -1368,23 +1407,25 @@ func (q *Queries) HasInterviewAssignments(ctx context.Context, interviewerID pgt
 }
 
 const insertCandidateReviewer = `-- name: InsertCandidateReviewer :one
-INSERT INTO candidate_reviewers (candidate_id, reviewer_id)
-VALUES ($1, $2)
+INSERT INTO candidate_reviewers (candidate_id, reviewer_id, assigned_by_user_id)
+VALUES ($1, $2, $3)
 ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET
   assigned_at = CURRENT_TIMESTAMP,
   removed_at = NULL,
+  assigned_by_user_id = EXCLUDED.assigned_by_user_id,
   review_status = 'pending',
   reviewed_at = NULL
-RETURNING id, candidate_id, reviewer_id, assigned_at, removed_at, created_at, review_status, reviewed_at
+RETURNING id, candidate_id, reviewer_id, assigned_at, removed_at, created_at, review_status, reviewed_at, assigned_by_user_id
 `
 
 type InsertCandidateReviewerParams struct {
-	CandidateID pgtype.UUID `json:"candidate_id"`
-	ReviewerID  pgtype.UUID `json:"reviewer_id"`
+	CandidateID      pgtype.UUID `json:"candidate_id"`
+	ReviewerID       pgtype.UUID `json:"reviewer_id"`
+	AssignedByUserID pgtype.UUID `json:"assigned_by_user_id"`
 }
 
 func (q *Queries) InsertCandidateReviewer(ctx context.Context, arg InsertCandidateReviewerParams) (CandidateReviewer, error) {
-	row := q.db.QueryRow(ctx, insertCandidateReviewer, arg.CandidateID, arg.ReviewerID)
+	row := q.db.QueryRow(ctx, insertCandidateReviewer, arg.CandidateID, arg.ReviewerID, arg.AssignedByUserID)
 	var i CandidateReviewer
 	err := row.Scan(
 		&i.ID,
@@ -1395,6 +1436,7 @@ func (q *Queries) InsertCandidateReviewer(ctx context.Context, arg InsertCandida
 		&i.CreatedAt,
 		&i.ReviewStatus,
 		&i.ReviewedAt,
+		&i.AssignedByUserID,
 	)
 	return i, err
 }
@@ -1422,7 +1464,7 @@ func (q *Queries) IsCandidateReviewer(ctx context.Context, arg IsCandidateReview
 
 const listCandidateComments = `-- name: ListCandidateComments :many
 SELECT 
-    cc.id, cc.candidate_id, cc.author_id, cc.content, cc.created_at,
+    cc.id, cc.candidate_id, cc.author_id, cc.content, cc.created_at, cc.comment_type,
     e.first_name || ' ' || e.last_name as author_name,
     u.avatar as author_avatar,
     CASE 
@@ -1443,6 +1485,7 @@ type ListCandidateCommentsRow struct {
 	AuthorID     pgtype.UUID        `json:"author_id"`
 	Content      string             `json:"content"`
 	CreatedAt    pgtype.Timestamptz `json:"created_at"`
+	CommentType  string             `json:"comment_type"`
 	AuthorName   interface{}        `json:"author_name"`
 	AuthorAvatar pgtype.Text        `json:"author_avatar"`
 	AuthorRole   string             `json:"author_role"`
@@ -1463,6 +1506,7 @@ func (q *Queries) ListCandidateComments(ctx context.Context, candidateID pgtype.
 			&i.AuthorID,
 			&i.Content,
 			&i.CreatedAt,
+			&i.CommentType,
 			&i.AuthorName,
 			&i.AuthorAvatar,
 			&i.AuthorRole,

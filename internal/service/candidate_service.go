@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
@@ -15,6 +16,7 @@ import (
 
 type CandidateService struct {
 	repo                  repository.Querier
+	txBeginner            TxBeginner
 	notificationPublisher *NotificationPublisher
 }
 
@@ -24,9 +26,15 @@ var (
 	ErrCandidateNotFound       = errors.New("candidate not found")
 )
 
-func NewCandidateService(repo repository.Querier) *CandidateService {
+func NewCandidateService(repo repository.Querier, txBeginner ...TxBeginner) *CandidateService {
+	var beginner TxBeginner
+	if len(txBeginner) > 0 {
+		beginner = txBeginner[0]
+	}
+
 	return &CandidateService{
 		repo:                  repo,
+		txBeginner:            beginner,
 		notificationPublisher: NewNotificationPublisher(repo),
 	}
 }
@@ -149,7 +157,7 @@ func (s *CandidateService) GetCandidateCountsByJob(ctx context.Context) (map[str
 	return counts, nil
 }
 
-func (s *CandidateService) AssignReviewer(ctx context.Context, id string, reviewerID string) (*model.Candidate, error) {
+func (s *CandidateService) AssignReviewer(ctx context.Context, id string, reviewerID string, assignedByUserID string) (*model.Candidate, error) {
 	uuid, err := utils.StringToUUID(id)
 	if err != nil {
 		return nil, err
@@ -160,22 +168,44 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 		return nil, err
 	}
 
-	row, err := s.repo.AssignReviewer(ctx, repository.AssignReviewerParams{
-		ID:         uuid,
-		ReviewerID: reviewerUUID,
-	})
+	assignedByUserUUID, err := utils.StringToUUID(assignedByUserID)
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.repo.UpdateCandidateReviewerRemovedAt(ctx, uuid); err != nil {
-		return nil, err
+	var row repository.AssignReviewerRow
+	assignCore := func(q repository.Querier) error {
+		assignedRow, assignErr := q.AssignReviewer(ctx, repository.AssignReviewerParams{
+			ID:         uuid,
+			ReviewerID: reviewerUUID,
+		})
+		if assignErr != nil {
+			return assignErr
+		}
+
+		if removeErr := q.UpdateCandidateReviewerRemovedAt(ctx, uuid); removeErr != nil {
+			return removeErr
+		}
+
+		if _, insertErr := q.InsertCandidateReviewer(ctx, repository.InsertCandidateReviewerParams{
+			CandidateID:      uuid,
+			ReviewerID:       reviewerUUID,
+			AssignedByUserID: assignedByUserUUID,
+		}); insertErr != nil {
+			return insertErr
+		}
+
+		row = assignedRow
+		return nil
 	}
 
-	_, err = s.repo.InsertCandidateReviewer(ctx, repository.InsertCandidateReviewerParams{
-		CandidateID: uuid,
-		ReviewerID:  reviewerUUID,
-	})
+	if s.txBeginner != nil {
+		err = runInTx(ctx, s.txBeginner, func(txQueries *repository.Queries) error {
+			return assignCore(txQueries)
+		})
+	} else {
+		err = assignCore(s.repo)
+	}
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +223,13 @@ func (s *CandidateService) AssignReviewer(ctx context.Context, id string, review
 	return mapAssignReviewerRowToModel(row), nil
 }
 
-func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID string, status string) (*model.Candidate, error) {
+func (s *CandidateService) SubmitReview(
+	ctx context.Context,
+	id string,
+	userID string,
+	status string,
+	comment string,
+) (*model.Candidate, error) {
 	candidateID, err := utils.StringToUUID(id)
 	if err != nil {
 		return nil, err
@@ -204,73 +240,154 @@ func (s *CandidateService) SubmitReview(ctx context.Context, id string, userID s
 		return nil, err
 	}
 
-	employee, err := s.repo.GetEmployeeByUserID(ctx, userUUID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrReviewerProfileNotFound
-		}
-		return nil, err
-	}
+	var row repository.SubmitReviewRow
+	shouldNotifyRecruiter := false
+	recruiterUserID := pgtype.UUID{}
+	reviewerName := ""
 
-	candidate, err := s.repo.GetCandidate(ctx, candidateID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, ErrCandidateNotFound
-		}
-		return nil, err
-	}
-
-	assignmentID, err := s.repo.IsCandidateReviewer(ctx, repository.IsCandidateReviewerParams{
-		CandidateID: candidateID,
-		ReviewerID:  employee.ID,
-	})
-	if err != nil {
-		// Legacy fallback for rows created before assignment-table based review status.
-		if errors.Is(err, pgx.ErrNoRows) {
-			if !candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID) {
-				return nil, ErrReviewPermissionDenied
+	submitCore := func(q repository.Querier) error {
+		employee, getEmployeeErr := q.GetEmployeeByUserID(ctx, userUUID)
+		if getEmployeeErr != nil {
+			if errors.Is(getEmployeeErr, pgx.ErrNoRows) {
+				return ErrReviewerProfileNotFound
 			}
-		} else {
-			return nil, err
+			return getEmployeeErr
 		}
-	}
-	if !assignmentID.Valid &&
-		(!candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID)) {
-		return nil, ErrReviewPermissionDenied
+
+		candidate, getCandidateErr := q.GetCandidate(ctx, candidateID)
+		if getCandidateErr != nil {
+			if errors.Is(getCandidateErr, pgx.ErrNoRows) {
+				return ErrCandidateNotFound
+			}
+			return getCandidateErr
+		}
+
+		assignment, getAssignmentErr := q.GetReviewerAssignment(ctx, repository.GetReviewerAssignmentParams{
+			CandidateID: candidateID,
+			ReviewerID:  employee.ID,
+		})
+		assignmentExists := true
+		if getAssignmentErr != nil {
+			// Legacy fallback for rows created before assignment-table based review status.
+			if errors.Is(getAssignmentErr, pgx.ErrNoRows) {
+				assignmentExists = false
+				if !candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID) {
+					return ErrReviewPermissionDenied
+				}
+			} else {
+				return getAssignmentErr
+			}
+		}
+		if !assignmentExists &&
+			(!candidate.ReviewerID.Valid || utils.UUIDToString(candidate.ReviewerID) != utils.UUIDToString(employee.ID)) {
+			return ErrReviewPermissionDenied
+		}
+
+		submittedRow, submitErr := q.SubmitReview(ctx, repository.SubmitReviewParams{
+			ID:           candidateID,
+			ReviewStatus: pgtype.Text{String: status, Valid: true},
+		})
+		if submitErr != nil {
+			return submitErr
+		}
+
+		if updateErr := q.UpdateCandidateReviewerReviewStatus(ctx, repository.UpdateCandidateReviewerReviewStatusParams{
+			CandidateID:  candidateID,
+			ReviewerID:   employee.ID,
+			ReviewStatus: status,
+		}); updateErr != nil {
+			return updateErr
+		}
+
+		trimmedComment := strings.TrimSpace(comment)
+		if trimmedComment != "" {
+			if _, createCommentErr := q.CreateCandidateComment(ctx, repository.CreateCandidateCommentParams{
+				CandidateID: candidateID,
+				AuthorID:    employee.ID,
+				Content:     trimmedComment,
+				CommentType: "normal",
+			}); createCommentErr != nil {
+				return createCommentErr
+			}
+		}
+
+		if decisionCommentType, ok := reviewStatusToDecisionCommentType(status); ok {
+			if _, createDecisionErr := q.CreateCandidateComment(ctx, repository.CreateCandidateCommentParams{
+				CandidateID: candidateID,
+				AuthorID:    employee.ID,
+				Content:     status,
+				CommentType: decisionCommentType,
+			}); createDecisionErr != nil {
+				return createDecisionErr
+			}
+		}
+
+		if deleteErr := q.DeleteNotificationsBySubjectAndType(ctx, repository.DeleteNotificationsBySubjectAndTypeParams{
+			UserID:      userUUID,
+			SubjectType: model.NotificationSubjectTypeCandidate,
+			SubjectID:   candidateID,
+			EventType:   model.NotificationEventCandidateReviewerAssigned,
+		}); deleteErr != nil {
+			log.Printf(
+				"warn: failed to delete notification event=%s reviewer_user_id=%s candidate_id=%s err=%v",
+				model.NotificationEventCandidateReviewerAssigned,
+				userID,
+				id,
+				deleteErr,
+			)
+		}
+
+		if status != "pending" && assignmentExists && assignment.AssignedByUserID.Valid {
+			shouldNotifyRecruiter = true
+			recruiterUserID = assignment.AssignedByUserID
+			reviewerName = strings.TrimSpace(employee.FirstName + " " + employee.LastName)
+		}
+
+		row = submittedRow
+		return nil
 	}
 
-	row, err := s.repo.SubmitReview(ctx, repository.SubmitReviewParams{
-		ID:           candidateID,
-		ReviewStatus: pgtype.Text{String: status, Valid: true},
-	})
+	if s.txBeginner != nil {
+		err = runInTx(ctx, s.txBeginner, func(txQueries *repository.Queries) error {
+			return submitCore(txQueries)
+		})
+	} else {
+		err = submitCore(s.repo)
+	}
 	if err != nil {
 		return nil, err
 	}
 
-	if err := s.repo.UpdateCandidateReviewerReviewStatus(ctx, repository.UpdateCandidateReviewerReviewStatusParams{
-		CandidateID:  candidateID,
-		ReviewerID:   employee.ID,
-		ReviewStatus: status,
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := s.repo.DeleteNotificationsBySubjectAndType(ctx, repository.DeleteNotificationsBySubjectAndTypeParams{
-		UserID:      userUUID,
-		SubjectType: model.NotificationSubjectTypeCandidate,
-		SubjectID:   candidateID,
-		EventType:   model.NotificationEventCandidateReviewerAssigned,
-	}); err != nil {
-		log.Printf(
-			"warn: failed to delete notification event=%s reviewer_user_id=%s candidate_id=%s err=%v",
-			model.NotificationEventCandidateReviewerAssigned,
-			userID,
-			id,
-			err,
-		)
+	if shouldNotifyRecruiter {
+		if notifyErr := s.notificationPublisher.PublishReviewCompleted(
+			ctx,
+			recruiterUserID,
+			candidateID,
+			status,
+			reviewerName,
+		); notifyErr != nil {
+			log.Printf(
+				"warn: failed to publish notification event=%s recruiter_user_id=%s candidate_id=%s err=%v",
+				model.NotificationEventReviewCompleted,
+				utils.UUIDToString(recruiterUserID),
+				id,
+				notifyErr,
+			)
+		}
 	}
 
 	return mapSubmitReviewRowToModel(row), nil
+}
+
+func reviewStatusToDecisionCommentType(status string) (string, bool) {
+	switch status {
+	case "suitable":
+		return "review_suitable", true
+	case "unsuitable":
+		return "review_unsuitable", true
+	default:
+		return "", false
+	}
 }
 
 func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.Candidate, error) {

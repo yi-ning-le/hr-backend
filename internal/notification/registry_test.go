@@ -42,3 +42,46 @@ func TestBuildPresentation_UnknownEventFallback(t *testing.T) {
 		t.Fatalf("expected nil action for unknown event")
 	}
 }
+
+func TestValidatePayload_ReviewCompleted(t *testing.T) {
+	err := ValidatePayload(
+		model.NotificationEventReviewCompleted,
+		model.NotificationSubjectTypeCandidate,
+		ReviewCompletedPayload{
+			CandidateID:  "11111111-1111-1111-1111-111111111111",
+			ReviewStatus: "suitable",
+			ReviewerName: "Alice Lee",
+		},
+	)
+	if err != nil {
+		t.Fatalf("expected valid review_completed payload, got error: %v", err)
+	}
+}
+
+func TestBuildPresentation_ReviewCompleted(t *testing.T) {
+	content, action := BuildPresentation(
+		model.NotificationEventReviewCompleted,
+		"11111111-1111-1111-1111-111111111111",
+		map[string]any{
+			"candidateId":  "11111111-1111-1111-1111-111111111111",
+			"reviewStatus": "unsuitable",
+			"reviewerName": "Alice Lee",
+		},
+	)
+
+	if content.TitleKey != "notifications.events.review_completed.title" {
+		t.Fatalf("unexpected title key: %s", content.TitleKey)
+	}
+	if content.MessageKey != "notifications.events.review_completed.message" {
+		t.Fatalf("unexpected message key: %s", content.MessageKey)
+	}
+	if action == nil {
+		t.Fatalf("expected non-nil action")
+	}
+	if action.Kind != "candidateReview" {
+		t.Fatalf("unexpected action kind: %s", action.Kind)
+	}
+	if action.Params["candidateId"] != "11111111-1111-1111-1111-111111111111" {
+		t.Fatalf("unexpected candidateId param: %v", action.Params["candidateId"])
+	}
+}
