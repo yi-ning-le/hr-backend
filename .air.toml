@@ -2,7 +2,7 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-  bin = "./tmp/main"
+  entrypoint = ["./tmp/main"]
   cmd = "go build -o ./tmp/main main.go"
   delay = 1000
   exclude_dir = ["tmp", "vendor", "test", "scripts", "uploads", ".git", ".idea", ".vscode", "migrations"]

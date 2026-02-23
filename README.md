@@ -47,7 +47,7 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 2. Set up the development environment (installs tools and git hooks):
 
    ```bash
-   make setup
+   just setup
    ```
 
 3. Set up environment variables:
@@ -63,16 +63,10 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
    sqlc generate
    ```
 
-5. Run the application:
+5. Run the development server (with hot module replacement):
 
    ```bash
-   make run
-   ```
-
-   **OR for development with hot module replacement (HMR):**
-
-   ```bash
-   make dev
+   just dev
    ```
 
 ### API Endpoints
