@@ -24,9 +24,10 @@ type InterviewAssignedPayload struct {
 }
 
 type ReviewCompletedPayload struct {
-	CandidateID  string `json:"candidateId"`
-	ReviewStatus string `json:"reviewStatus"`
-	ReviewerName string `json:"reviewerName"`
+	CandidateID   string `json:"candidateId"`
+	CandidateName string `json:"candidateName"`
+	ReviewStatus  string `json:"reviewStatus"`
+	ReviewerName  string `json:"reviewerName"`
 }
 
 func ValidatePayload(eventType, subjectType string, payload any) error {
@@ -125,7 +126,7 @@ func BuildPresentation(eventType, subjectID string, context map[string]any) (mod
 			candidateID = payload.CandidateID
 		}
 		return content, &model.NotificationAction{
-			Kind:   "candidateReview",
+			Kind:   "reviewFinished",
 			Params: map[string]any{"candidateId": candidateID},
 		}
 	default:

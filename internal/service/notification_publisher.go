@@ -62,6 +62,7 @@ func (p *NotificationPublisher) PublishReviewCompleted(
 	ctx context.Context,
 	recruiterUserID pgtype.UUID,
 	candidateID pgtype.UUID,
+	candidateName string,
 	reviewStatus string,
 	reviewerName string,
 ) error {
@@ -69,18 +70,20 @@ func (p *NotificationPublisher) PublishReviewCompleted(
 		model.NotificationEventReviewCompleted,
 		model.NotificationSubjectTypeCandidate,
 		notification.ReviewCompletedPayload{
-			CandidateID:  utils.UUIDToString(candidateID),
-			ReviewStatus: reviewStatus,
-			ReviewerName: reviewerName,
+			CandidateID:   utils.UUIDToString(candidateID),
+			CandidateName: candidateName,
+			ReviewStatus:  reviewStatus,
+			ReviewerName:  reviewerName,
 		},
 	); err != nil {
 		return err
 	}
 
 	payload := notification.ReviewCompletedPayload{
-		CandidateID:  utils.UUIDToString(candidateID),
-		ReviewStatus: reviewStatus,
-		ReviewerName: reviewerName,
+		CandidateID:   utils.UUIDToString(candidateID),
+		CandidateName: candidateName,
+		ReviewStatus:  reviewStatus,
+		ReviewerName:  reviewerName,
 	}
 
 	contextJSON, err := json.Marshal(payload)

@@ -78,7 +78,7 @@ func TestBuildPresentation_ReviewCompleted(t *testing.T) {
 	if action == nil {
 		t.Fatalf("expected non-nil action")
 	}
-	if action.Kind != "candidateReview" {
+	if action.Kind != "reviewFinished" {
 		t.Fatalf("unexpected action kind: %s", action.Kind)
 	}
 	if action.Params["candidateId"] != "11111111-1111-1111-1111-111111111111" {

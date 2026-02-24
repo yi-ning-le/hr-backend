@@ -244,6 +244,7 @@ func (s *CandidateService) SubmitReview(
 	shouldNotifyRecruiter := false
 	recruiterUserID := pgtype.UUID{}
 	reviewerName := ""
+	candidateName := ""
 
 	submitCore := func(q repository.Querier) error {
 		employee, getEmployeeErr := q.GetEmployeeByUserID(ctx, userUUID)
@@ -261,6 +262,7 @@ func (s *CandidateService) SubmitReview(
 			}
 			return getCandidateErr
 		}
+		candidateName = candidate.Name
 
 		assignment, getAssignmentErr := q.GetReviewerAssignment(ctx, repository.GetReviewerAssignmentParams{
 			CandidateID: candidateID,
@@ -363,6 +365,7 @@ func (s *CandidateService) SubmitReview(
 			ctx,
 			recruiterUserID,
 			candidateID,
+			candidateName,
 			status,
 			reviewerName,
 		); notifyErr != nil {

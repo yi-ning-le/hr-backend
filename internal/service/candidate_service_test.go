@@ -248,6 +248,7 @@ func TestSubmitReview_PublishesReviewCompletedToRecruiter(t *testing.T) {
 		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
 			return repository.GetCandidateRow{
 				ID:         candidateID,
+				Name:       "John Doe",
 				ReviewerID: reviewerEmployeeID,
 			}, nil
 		},
@@ -277,6 +278,7 @@ func TestSubmitReview_PublishesReviewCompletedToRecruiter(t *testing.T) {
 			var payload map[string]string
 			assert.NoError(t, json.Unmarshal(arg.Context, &payload))
 			assert.Equal(t, candidateIDStr, payload["candidateId"])
+			assert.Equal(t, "John Doe", payload["candidateName"])
 			assert.Equal(t, "suitable", payload["reviewStatus"])
 			assert.Equal(t, "Alice Lee", payload["reviewerName"])
 			return repository.Notification{}, nil
