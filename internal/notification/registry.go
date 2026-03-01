@@ -76,19 +76,23 @@ func ValidatePayload(eventType, subjectType string, payload any) error {
 	}
 }
 
-func BuildPresentation(eventType, subjectID string, context map[string]any) (model.NotificationContent, *model.NotificationAction) {
+func BuildPresentation(eventType, subjectID string, context json.RawMessage) (model.NotificationContent, *model.NotificationAction) {
+	// Common logic to unmarshal context into map for simple template substitution
+	var contextMap map[string]any
+	if len(context) > 0 {
+		_ = json.Unmarshal(context, &contextMap)
+	}
+
 	switch eventType {
 	case model.NotificationEventCandidateReviewerAssigned:
 		content := model.NotificationContent{
 			TitleKey:   "notifications.events.candidate_reviewer_assigned.title",
 			MessageKey: "notifications.events.candidate_reviewer_assigned.message",
-		}
-		if len(context) > 0 {
-			content.Params = context
+			Params:     contextMap,
 		}
 		candidateID := subjectID
 		var payload CandidateReviewerAssignedPayload
-		if err := decodeContext(context, &payload); err == nil && payload.CandidateID != "" {
+		if err := json.Unmarshal(context, &payload); err == nil && payload.CandidateID != "" {
 			candidateID = payload.CandidateID
 		}
 		return content, &model.NotificationAction{
@@ -99,13 +103,11 @@ func BuildPresentation(eventType, subjectID string, context map[string]any) (mod
 		content := model.NotificationContent{
 			TitleKey:   "notifications.events.interview_assigned.title",
 			MessageKey: "notifications.events.interview_assigned.message",
-		}
-		if len(context) > 0 {
-			content.Params = context
+			Params:     contextMap,
 		}
 		interviewID := subjectID
 		var payload InterviewAssignedPayload
-		if err := decodeContext(context, &payload); err == nil && payload.InterviewID != "" {
+		if err := json.Unmarshal(context, &payload); err == nil && payload.InterviewID != "" {
 			interviewID = payload.InterviewID
 		}
 		return content, &model.NotificationAction{
@@ -116,13 +118,11 @@ func BuildPresentation(eventType, subjectID string, context map[string]any) (mod
 		content := model.NotificationContent{
 			TitleKey:   "notifications.events.review_completed.title",
 			MessageKey: "notifications.events.review_completed.message",
-		}
-		if len(context) > 0 {
-			content.Params = context
+			Params:     contextMap,
 		}
 		candidateID := subjectID
 		var payload ReviewCompletedPayload
-		if err := decodeContext(context, &payload); err == nil && payload.CandidateID != "" {
+		if err := json.Unmarshal(context, &payload); err == nil && payload.CandidateID != "" {
 			candidateID = payload.CandidateID
 		}
 		return content, &model.NotificationAction{
@@ -135,15 +135,4 @@ func BuildPresentation(eventType, subjectID string, context map[string]any) (mod
 			MessageKey: "notifications.events.generic.message",
 		}, nil
 	}
-}
-
-func decodeContext(context map[string]any, out any) error {
-	if len(context) == 0 {
-		return errors.New("context is empty")
-	}
-	raw, err := json.Marshal(context)
-	if err != nil {
-		return err
-	}
-	return json.Unmarshal(raw, out)
 }

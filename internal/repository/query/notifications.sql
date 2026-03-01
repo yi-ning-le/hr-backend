@@ -41,3 +41,7 @@ WHERE user_id = $1
   AND subject_type = $2
   AND subject_id = $3
   AND event_type = $4;
+
+-- name: DeleteNotificationsBySubjectIDAndEventType :exec
+DELETE FROM notifications
+WHERE subject_id = $1 AND event_type = $2;

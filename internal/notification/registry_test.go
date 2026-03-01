@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"encoding/json"
 	"testing"
 
 	"hr-backend/internal/model"
@@ -62,11 +63,11 @@ func TestBuildPresentation_ReviewCompleted(t *testing.T) {
 	content, action := BuildPresentation(
 		model.NotificationEventReviewCompleted,
 		"11111111-1111-1111-1111-111111111111",
-		map[string]any{
+		json.RawMessage(`{
 			"candidateId":  "11111111-1111-1111-1111-111111111111",
 			"reviewStatus": "unsuitable",
-			"reviewerName": "Alice Lee",
-		},
+			"reviewerName": "Alice Lee"
+		}`),
 	)
 
 	if content.TitleKey != "notifications.events.review_completed.title" {

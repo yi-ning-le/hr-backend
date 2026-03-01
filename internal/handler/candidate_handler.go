@@ -232,6 +232,29 @@ func (h *CandidateHandler) UpdateStatus(c *gin.Context) {
 	c.JSON(http.StatusOK, candidate)
 }
 
+func (h *CandidateHandler) RevertReviewer(c *gin.Context) {
+	id := c.Param("id")
+
+	candidate, err := h.service.RevertReviewer(c.Request.Context(), id)
+	if err != nil {
+		if errors.Is(err, service.ErrInvalidCandidateID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid candidate ID"})
+			return
+		}
+		if errors.Is(err, service.ErrNoReviewerToRevert) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "No reviewer to revert"})
+			return
+		}
+		if errors.Is(err, service.ErrReviewAlreadySubmitted) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Review already submitted, cannot revert"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	c.JSON(http.StatusOK, candidate)
+}
+
 func (h *CandidateHandler) UploadResume(c *gin.Context) {
 	id := c.Param("id")
 	file, err := c.FormFile("file")

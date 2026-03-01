@@ -1,0 +1,1 @@
+ALTER TABLE candidate_reviewers DROP CONSTRAINT candidate_reviewers_candidate_id_reviewer_id_key;

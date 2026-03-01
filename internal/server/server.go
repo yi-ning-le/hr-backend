@@ -153,7 +153,11 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		recruiterWrite.GET("/recruitment/interviews", recruitmentHandler.GetAllInterviews)
 		recruiterWrite.POST("/recruitment/interviews", recruitmentHandler.CreateInterview)
 		recruiterWrite.PUT("/recruitment/interviews/:id", recruitmentHandler.UpdateInterview)
+		recruiterWrite.DELETE("/recruitment/interviews/:id", recruitmentHandler.DeleteInterview)
 		recruiterWrite.POST("/recruitment/interviews/:id/transfer", recruitmentHandler.TransferInterview)
+
+		// Reviewer Management
+		recruiterWrite.POST("/candidates/:id/revert-reviewer", candidateHandler.RevertReviewer)
 	}
 
 	// HR Admin Access

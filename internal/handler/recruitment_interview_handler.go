@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"strconv"
 	"strings"
@@ -9,9 +10,11 @@ import (
 
 	"hr-backend/internal/model"
 	"hr-backend/internal/repository"
+	"hr-backend/internal/service"
 	"hr-backend/internal/utils"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 )
 
@@ -188,7 +191,7 @@ func (h *RecruitmentHandler) GetInterview(c *gin.Context) {
 	ctx := c.Request.Context()
 	interview, err := h.queries.GetInterview(ctx, interviewID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		writeGetInterviewError(c, err)
 		return
 	}
 
@@ -247,7 +250,7 @@ func (h *RecruitmentHandler) UpdateInterviewStatus(c *gin.Context) {
 
 	interview, err := h.queries.GetInterview(ctx, interviewID)
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		writeGetInterviewError(c, err)
 		return
 	}
 
@@ -414,6 +417,55 @@ func (h *RecruitmentHandler) GetAllInterviews(c *gin.Context) {
 	})
 }
 
+// DeleteInterview deletes an interview (Recruiter only, only for PENDING status)
+func (h *RecruitmentHandler) DeleteInterview(c *gin.Context) {
+	interviewIDStr := c.Param("id")
+	interviewID, err := parseUUID(interviewIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid interview ID"})
+		return
+	}
+
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
+	ctx := c.Request.Context()
+
+	hasPermission, err := h.checkRecruiterOrAdmin(ctx, userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to verify permissions"})
+		return
+	}
+	if !hasPermission {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Permission denied"})
+		return
+	}
+
+	interview, err := h.queries.GetInterview(ctx, interviewID)
+	if err != nil {
+		writeGetInterviewError(c, err)
+		return
+	}
+
+	if interview.Status != "PENDING" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Only pending interviews can be deleted"})
+		return
+	}
+
+	if err := h.recruitmentService.DeleteInterview(ctx, interviewID); err != nil {
+		if errors.Is(err, service.ErrInterviewNotPendingOrNotFound) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Only pending interviews can be deleted"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete interview"})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "Interview deleted successfully"})
+}
+
 // UpdateInterview updates interview details (Recruiter only)
 func (h *RecruitmentHandler) UpdateInterview(c *gin.Context) {
 	interviewIDStr := c.Param("id")
@@ -535,6 +587,14 @@ func (h *RecruitmentHandler) canAccessInterviewByInterviewer(
 func (h *RecruitmentHandler) checkRecruiterOrAdmin(ctx context.Context, userID pgtype.UUID) (bool, error) {
 	res, err := h.queries.CheckRecruiterOrAdmin(ctx, userID)
 	return res.Bool, err
+}
+
+func writeGetInterviewError(c *gin.Context, err error) {
+	if errors.Is(err, pgx.ErrNoRows) {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Interview not found"})
+		return
+	}
+	c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get interview"})
 }
 
 func parseUUID(s string) (pgtype.UUID, error) {

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -284,4 +285,138 @@ func TestSubmitReviewHandler_ReturnsNotFoundWhenCandidateMissing(t *testing.T) {
 	if submitCalled {
 		t.Error("expected SubmitReview not to be called")
 	}
+}
+
+func TestRevertReviewerHandler_InvalidCandidateID_ReturnsBadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	svc := service.NewCandidateService(&mocks.MockQuerier{})
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/revert-reviewer", h.RevertReviewer)
+
+	req, _ := http.NewRequest("POST", "/candidates/invalid-id/revert-reviewer", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRevertReviewerHandler_NoReviewerToRevert_ReturnsBadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, candidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{}, pgx.ErrNoRows
+		},
+	}
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/revert-reviewer", h.RevertReviewer)
+
+	req, _ := http.NewRequest("POST", "/candidates/00000000-0000-0000-0000-000000000001/revert-reviewer", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRevertReviewerHandler_ReviewAlreadySubmitted_ReturnsBadRequest(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, candidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{ReviewStatus: "suitable"}, nil
+		},
+	}
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/revert-reviewer", h.RevertReviewer)
+
+	req, _ := http.NewRequest("POST", "/candidates/00000000-0000-0000-0000-000000000001/revert-reviewer", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("expected 400, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRevertReviewerHandler_UnexpectedError_ReturnsInternalServerError(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, candidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{}, errors.New("database unavailable")
+		},
+	}
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/revert-reviewer", h.RevertReviewer)
+
+	req, _ := http.NewRequest("POST", "/candidates/00000000-0000-0000-0000-000000000001/revert-reviewer", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("expected 500, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestRevertReviewerHandler_Success_ReturnsOK(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	candidateID := mustScanCandidateHandlerUUID(t, "00000000-0000-0000-0000-000000000001")
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{ReviewStatus: "pending"}, nil
+		},
+		RemoveCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (int64, error) {
+			return 1, nil
+		},
+		ClearCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) error {
+			return nil
+		},
+		GetCandidateFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:              candidateID,
+				Name:            "John Doe",
+				AppliedJobTitle: "Software Engineer",
+				AppliedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
+			}, nil
+		},
+	}
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates/:id/revert-reviewer", h.RevertReviewer)
+
+	req, _ := http.NewRequest("POST", "/candidates/00000000-0000-0000-0000-000000000001/revert-reviewer", nil)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func mustScanCandidateHandlerUUID(t *testing.T, raw string) pgtype.UUID {
+	t.Helper()
+	var id pgtype.UUID
+	if err := id.Scan(raw); err != nil {
+		t.Fatalf("failed to scan uuid %s: %v", raw, err)
+	}
+	return id
 }

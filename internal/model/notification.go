@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // Notification event types.
 const (
@@ -19,7 +22,7 @@ type Notification struct {
 	UserID    string              `json:"userId"`
 	EventType string              `json:"eventType"`
 	Subject   NotificationSubject `json:"subject"`
-	Context   map[string]any      `json:"context,omitempty"`
+	Context   json.RawMessage     `json:"context,omitempty"`
 	Content   NotificationContent `json:"content"`
 	Action    *NotificationAction `json:"action,omitempty"`
 	IsRead    bool                `json:"isRead"`

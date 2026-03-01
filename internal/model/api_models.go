@@ -41,6 +41,7 @@ type Candidate struct {
 	Status          string    `json:"status"`
 	AppliedAt       time.Time `json:"appliedAt"`
 	ReviewerID      string    `json:"reviewerId,omitempty"`
+	ReviewerName    string    `json:"reviewerName,omitempty"`
 	ReviewStatus    string    `json:"reviewStatus,omitempty"`
 }
 

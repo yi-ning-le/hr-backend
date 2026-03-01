@@ -47,23 +47,33 @@ INSERT INTO candidates (
 RETURNING *;
 
 -- name: GetCandidate :one
-SELECT c.*, j.title as applied_job_title
+SELECT 
+    c.*, 
+    j.title as applied_job_title,
+    e.first_name as reviewer_first_name,
+    e.last_name as reviewer_last_name
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
+LEFT JOIN employees e ON c.reviewer_id = e.id
 WHERE c.id = $1 LIMIT 1;
 
 -- name: ListCandidates :many
-SELECT c.*, j.title as applied_job_title
+SELECT 
+    c.*, 
+    j.title as applied_job_title,
+    e.first_name as reviewer_first_name,
+    e.last_name as reviewer_last_name
 FROM candidates c
 JOIN jobs j ON c.applied_job_id = j.id
+LEFT JOIN employees e ON c.reviewer_id = e.id
 WHERE (sqlc.narg('job_id')::uuid IS NULL OR c.applied_job_id = sqlc.narg('job_id'))
   AND (sqlc.narg('reviewer_id')::uuid IS NULL OR c.reviewer_id = sqlc.narg('reviewer_id'))
   AND (sqlc.narg('review_status')::text IS NULL OR c.review_status = sqlc.narg('review_status'))
   AND (sqlc.narg('status')::text IS NULL OR c.status = sqlc.narg('status'))
   AND (sqlc.narg('search')::text IS NULL OR 
-       c.name ILIKE '%' || sqlc.narg('search')::text || '%' OR 
-       c.email ILIKE '%' || sqlc.narg('search')::text || '%' OR 
-       c.phone ILIKE '%' || sqlc.narg('search')::text || '%')
+    c.name ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+    c.email ILIKE '%' || sqlc.narg('search')::text || '%' OR 
+    c.phone ILIKE '%' || sqlc.narg('search')::text || '%')
 ORDER BY c.applied_at DESC
 LIMIT $1 OFFSET $2;
 
@@ -121,16 +131,34 @@ SET reviewer_id = $2,
     review_status = 'pending',
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
+LEFT JOIN employees e ON $2 = e.id
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title;
+RETURNING 
+    c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, 
+    j.title as applied_job_title,
+    e.first_name as reviewer_first_name,
+    e.last_name as reviewer_last_name;
+
+-- name: ClearCandidateReviewer :exec
+UPDATE candidates
+SET reviewer_id = NULL,
+    review_status = NULL,
+    review_note = NULL,
+    updated_at = CURRENT_TIMESTAMP
+WHERE id = $1;
 
 -- name: SubmitReview :one
 UPDATE candidates c
 SET review_status = $2,
     updated_at = CURRENT_TIMESTAMP
 FROM jobs j
+LEFT JOIN employees e ON e.id = (SELECT reviewer_id FROM candidates WHERE id = $1)
 WHERE c.id = $1 AND c.applied_job_id = j.id
-RETURNING c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, j.title as applied_job_title;
+RETURNING 
+    c.id, c.name, c.avatar, c.email, c.phone, c.experience_years, c.education, c.applied_job_id, c.channel, c.resume_url, c.status, c.applied_at, c.created_at, c.updated_at, c.reviewer_id, c.review_status, 
+    j.title as applied_job_title,
+    e.first_name as reviewer_first_name,
+    e.last_name as reviewer_last_name;
 
 -- name: DeleteCandidate :exec
 DELETE FROM candidates
@@ -411,6 +439,34 @@ SET status = $2,
 WHERE id = $1
 RETURNING *;
 
+-- name: DeleteInterview :execrows
+DELETE FROM interviews
+WHERE id = $1
+  AND status = 'PENDING';
+
+-- name: GetCurrentCandidateReviewer :one
+SELECT *
+FROM candidate_reviewers
+WHERE candidate_id = $1 AND removed_at IS NULL
+ORDER BY assigned_at DESC
+FOR UPDATE
+LIMIT 1;
+
+-- name: RemoveCandidateReviewer :execrows
+UPDATE candidate_reviewers
+SET removed_at = CURRENT_TIMESTAMP
+WHERE candidate_id = $1
+  AND removed_at IS NULL
+  AND review_status = 'pending'
+  AND reviewed_at IS NULL;
+
+-- name: GetCandidateReviewerForRevert :one
+SELECT *
+FROM candidate_reviewers
+WHERE candidate_id = $1
+ORDER BY assigned_at DESC
+LIMIT 1;
+
 -- HR Role queries
 
 -- name: AssignHRRole :exec
@@ -482,12 +538,6 @@ LIMIT 1;
 -- name: InsertCandidateReviewer :one
 INSERT INTO candidate_reviewers (candidate_id, reviewer_id, assigned_by_user_id)
 VALUES ($1, $2, $3)
-ON CONFLICT (candidate_id, reviewer_id) DO UPDATE SET
-  assigned_at = CURRENT_TIMESTAMP,
-  removed_at = NULL,
-  assigned_by_user_id = EXCLUDED.assigned_by_user_id,
-  review_status = 'pending',
-  reviewed_at = NULL
 RETURNING *;
 
 -- name: GetReviewerAssignment :one
@@ -496,6 +546,8 @@ FROM candidate_reviewers
 WHERE candidate_id = $1
   AND reviewer_id = $2
   AND removed_at IS NULL
+ORDER BY assigned_at DESC
+FOR UPDATE
 LIMIT 1;
 
 -- name: UpdateCandidateReviewerRemovedAt :exec

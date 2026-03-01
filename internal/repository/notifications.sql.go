@@ -93,6 +93,21 @@ func (q *Queries) DeleteNotificationsBySubjectAndType(ctx context.Context, arg D
 	return err
 }
 
+const deleteNotificationsBySubjectIDAndEventType = `-- name: DeleteNotificationsBySubjectIDAndEventType :exec
+DELETE FROM notifications
+WHERE subject_id = $1 AND event_type = $2
+`
+
+type DeleteNotificationsBySubjectIDAndEventTypeParams struct {
+	SubjectID pgtype.UUID `json:"subject_id"`
+	EventType string      `json:"event_type"`
+}
+
+func (q *Queries) DeleteNotificationsBySubjectIDAndEventType(ctx context.Context, arg DeleteNotificationsBySubjectIDAndEventTypeParams) error {
+	_, err := q.db.Exec(ctx, deleteNotificationsBySubjectIDAndEventType, arg.SubjectID, arg.EventType)
+	return err
+}
+
 const getNotificationsByUserId = `-- name: GetNotificationsByUserId :many
 SELECT id, user_id, event_type, subject_type, subject_id, context, read_at, created_at
 FROM notifications

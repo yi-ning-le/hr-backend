@@ -2,7 +2,6 @@ package service
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	"hr-backend/internal/model"
@@ -110,15 +109,8 @@ func parseUUID(raw string) (id pgtype.UUID, err error) {
 }
 
 func mapNotificationToModel(n repository.Notification) model.Notification {
-	contextData := map[string]any{}
-	if len(n.Context) > 0 {
-		if err := json.Unmarshal(n.Context, &contextData); err != nil {
-			contextData = map[string]any{}
-		}
-	}
-
 	subjectID := utils.UUIDToString(n.SubjectID)
-	content, action := notification.BuildPresentation(n.EventType, subjectID, contextData)
+	content, action := notification.BuildPresentation(n.EventType, subjectID, n.Context)
 
 	return model.Notification{
 		ID:        utils.UUIDToString(n.ID),
@@ -128,7 +120,7 @@ func mapNotificationToModel(n repository.Notification) model.Notification {
 			Type: n.SubjectType,
 			ID:   subjectID,
 		},
-		Context:   contextData,
+		Context:   n.Context,
 		Content:   content,
 		Action:    action,
 		IsRead:    n.ReadAt.Valid,

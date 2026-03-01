@@ -502,3 +502,162 @@ func TestSubmitReview_PendingSkipsDecisionCommentAndNotification(t *testing.T) {
 	assert.Equal(t, "Need follow-up", createdComments[0].Content)
 	assert.False(t, createNotificationCalled)
 }
+
+func TestRevertReviewer_InvalidCandidateID_ReturnsErrInvalidCandidateID(t *testing.T) {
+	svc := service.NewCandidateService(&mocks.MockQuerier{})
+
+	_, err := svc.RevertReviewer(context.Background(), "invalid-id")
+	assert.ErrorIs(t, err, service.ErrInvalidCandidateID)
+}
+
+func TestRevertReviewer_NoCurrentReviewer_ReturnsErrNoReviewerToRevert(t *testing.T) {
+	candidateID := mustScanUUID(t, "00000000-0000-0000-0000-000000000001")
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			assert.Equal(t, candidateID, inputCandidateID)
+			return repository.CandidateReviewer{}, pgx.ErrNoRows
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, service.ErrNoReviewerToRevert)
+}
+
+func TestRevertReviewer_GetCurrentReviewerDBError_PropagatesError(t *testing.T) {
+	expectedErr := errors.New("database unavailable")
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{}, expectedErr
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, expectedErr)
+}
+
+func TestRevertReviewer_ReviewedOrNonPending_ReturnsErrReviewAlreadySubmitted(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				ReviewStatus: "suitable",
+			}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, service.ErrReviewAlreadySubmitted)
+}
+
+func TestRevertReviewer_RemoveFails_ReturnsError(t *testing.T) {
+	expectedErr := errors.New("remove failed")
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				ReviewStatus: "pending",
+			}, nil
+		},
+		RemoveCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (int64, error) {
+			return 0, expectedErr
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, expectedErr)
+}
+
+func TestRevertReviewer_RemoveAffectsNoRows_ReturnsErrReviewAlreadySubmitted(t *testing.T) {
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				ReviewStatus: "pending",
+			}, nil
+		},
+		RemoveCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (int64, error) {
+			return 0, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, service.ErrReviewAlreadySubmitted)
+}
+
+func TestRevertReviewer_ClearFails_ReturnsError(t *testing.T) {
+	expectedErr := errors.New("clear failed")
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			return repository.CandidateReviewer{
+				ReviewStatus: "pending",
+			}, nil
+		},
+		RemoveCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (int64, error) {
+			return 1, nil
+		},
+		ClearCandidateReviewerFunc: func(ctx context.Context, id pgtype.UUID) error {
+			return expectedErr
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, err := svc.RevertReviewer(context.Background(), "00000000-0000-0000-0000-000000000001")
+	assert.ErrorIs(t, err, expectedErr)
+}
+
+func TestRevertReviewer_Success_CallsRemoveThenClearAndReturnsCandidate(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	candidateID := mustScanUUID(t, candidateIDStr)
+	callOrder := make([]string, 0, 4)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCurrentCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.CandidateReviewer, error) {
+			callOrder = append(callOrder, "get_current")
+			return repository.CandidateReviewer{
+				ReviewStatus: "pending",
+			}, nil
+		},
+		RemoveCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (int64, error) {
+			callOrder = append(callOrder, "remove")
+			assert.Equal(t, candidateID, inputCandidateID)
+			return 1, nil
+		},
+		ClearCandidateReviewerFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) error {
+			callOrder = append(callOrder, "clear")
+			assert.Equal(t, candidateID, inputCandidateID)
+			return nil
+		},
+		DeleteNotificationsBySubjectIDAndEventTypeFunc: func(ctx context.Context, arg repository.DeleteNotificationsBySubjectIDAndEventTypeParams) error {
+			callOrder = append(callOrder, "delete_notification")
+			assert.Equal(t, candidateID, arg.SubjectID)
+			assert.Equal(t, model.NotificationEventCandidateReviewerAssigned, arg.EventType)
+			return nil
+		},
+		GetCandidateFunc: func(ctx context.Context, inputCandidateID pgtype.UUID) (repository.GetCandidateRow, error) {
+			assert.Equal(t, candidateID, inputCandidateID)
+			return repository.GetCandidateRow{
+				ID:              candidateID,
+				Name:            "John Doe",
+				AppliedJobTitle: "Backend Engineer",
+			}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	candidate, err := svc.RevertReviewer(context.Background(), candidateIDStr)
+	assert.NoError(t, err)
+	assert.Equal(t, candidateIDStr, candidate.ID)
+	assert.Equal(t, "John Doe", candidate.Name)
+	assert.Equal(t, []string{"get_current", "remove", "clear", "delete_notification"}, callOrder)
+}
+
+func mustScanUUID(t *testing.T, raw string) pgtype.UUID {
+	t.Helper()
+	var id pgtype.UUID
+	if err := id.Scan(raw); err != nil {
+		t.Fatalf("failed to scan uuid %s: %v", raw, err)
+	}
+	return id
+}

@@ -24,6 +24,9 @@ var (
 	ErrReviewPermissionDenied  = errors.New("only assigned reviewer can submit review")
 	ErrReviewerProfileNotFound = errors.New("reviewer profile not found")
 	ErrCandidateNotFound       = errors.New("candidate not found")
+	ErrInvalidCandidateID      = errors.New("invalid candidate id")
+	ErrNoReviewerToRevert      = errors.New("no reviewer to revert")
+	ErrReviewAlreadySubmitted  = errors.New("review already submitted")
 )
 
 func NewCandidateService(repo repository.Querier, txBeginner ...TxBeginner) *CandidateService {
@@ -419,6 +422,7 @@ func (s *CandidateService) GetCandidate(ctx context.Context, id string) (*model.
 		Status:          row.Status,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewerName:    strings.TrimSpace(row.ReviewerFirstName.String + " " + row.ReviewerLastName.String),
 		ReviewStatus:    row.ReviewStatus.String,
 	}, nil
 }
@@ -494,6 +498,64 @@ func (s *CandidateService) UpdateResume(ctx context.Context, id string, resumeUr
 	return s.GetCandidate(ctx, id)
 }
 
+func (s *CandidateService) RevertReviewer(ctx context.Context, id string) (*model.Candidate, error) {
+	uuid, err := utils.StringToUUID(id)
+	if err != nil {
+		return nil, ErrInvalidCandidateID
+	}
+
+	revertCore := func(q repository.Querier) error {
+		currentReviewer, getErr := q.GetCurrentCandidateReviewer(ctx, uuid)
+		if getErr != nil {
+			if errors.Is(getErr, pgx.ErrNoRows) {
+				return ErrNoReviewerToRevert
+			}
+			return getErr
+		}
+
+		if currentReviewer.ReviewedAt.Valid || currentReviewer.ReviewStatus != "pending" {
+			return ErrReviewAlreadySubmitted
+		}
+
+		removedRows, removeErr := q.RemoveCandidateReviewer(ctx, uuid)
+		if removeErr != nil {
+			return removeErr
+		}
+		if removedRows == 0 {
+			return ErrReviewAlreadySubmitted
+		}
+
+		if err := q.ClearCandidateReviewer(ctx, uuid); err != nil {
+			return err
+		}
+
+		return nil
+	}
+	if s.txBeginner != nil {
+		err = runInTx(ctx, s.txBeginner, func(txQueries *repository.Queries) error {
+			return revertCore(txQueries)
+		})
+	} else {
+		err = revertCore(s.repo)
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.repo.DeleteNotificationsBySubjectIDAndEventType(ctx, repository.DeleteNotificationsBySubjectIDAndEventTypeParams{
+		SubjectID: uuid,
+		EventType: model.NotificationEventCandidateReviewerAssigned,
+	}); err != nil {
+		log.Printf(
+			"warn: failed to delete notifications for candidate_id=%s err=%v",
+			id,
+			err,
+		)
+	}
+
+	return s.GetCandidate(ctx, id)
+}
+
 func (s *CandidateService) DeleteCandidate(ctx context.Context, id string) error {
 	uuid, err := utils.StringToUUID(id)
 	if err != nil {
@@ -518,6 +580,7 @@ func mapCandidateRowToModel(row repository.ListCandidatesRow) model.Candidate {
 		Status:          row.Status,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewerName:    strings.TrimSpace(row.ReviewerFirstName.String + " " + row.ReviewerLastName.String),
 		ReviewStatus:    row.ReviewStatus.String,
 	}
 }
@@ -538,6 +601,7 @@ func mapAssignReviewerRowToModel(row repository.AssignReviewerRow) *model.Candid
 		Status:          row.Status,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewerName:    strings.TrimSpace(row.ReviewerFirstName + " " + row.ReviewerLastName),
 		ReviewStatus:    row.ReviewStatus.String,
 	}
 }
@@ -558,6 +622,7 @@ func mapSubmitReviewRowToModel(row repository.SubmitReviewRow) *model.Candidate 
 		Status:          row.Status,
 		AppliedAt:       row.AppliedAt.Time,
 		ReviewerID:      utils.UUIDToString(row.ReviewerID),
+		ReviewerName:    strings.TrimSpace(row.ReviewerFirstName + " " + row.ReviewerLastName),
 		ReviewStatus:    row.ReviewStatus.String,
 	}
 }

@@ -22,6 +22,7 @@ type Querier interface {
 	CheckIsHR(ctx context.Context, id pgtype.UUID) (bool, error)
 	CheckRecruiterOrAdmin(ctx context.Context, id pgtype.UUID) (pgtype.Bool, error)
 	CheckRecruiterRole(ctx context.Context, employeeID pgtype.UUID) (pgtype.UUID, error)
+	ClearCandidateReviewer(ctx context.Context, id pgtype.UUID) error
 	// Candidate Reviewer queries
 	CountCandidateReviewerAssignments(ctx context.Context, reviewerID pgtype.UUID) (int64, error)
 	CountCandidates(ctx context.Context, arg CountCandidatesParams) (int64, error)
@@ -48,9 +49,11 @@ type Querier interface {
 	DeleteEmployee(ctx context.Context, id pgtype.UUID) error
 	DeleteExpiredSessions(ctx context.Context) error
 	DeleteInactiveSessions(ctx context.Context, lastActiveAt pgtype.Timestamptz) error
+	DeleteInterview(ctx context.Context, id pgtype.UUID) (int64, error)
 	DeleteJob(ctx context.Context, id pgtype.UUID) error
 	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	DeleteNotificationsBySubjectAndType(ctx context.Context, arg DeleteNotificationsBySubjectAndTypeParams) error
+	DeleteNotificationsBySubjectIDAndEventType(ctx context.Context, arg DeleteNotificationsBySubjectIDAndEventTypeParams) error
 	DeleteSession(ctx context.Context, id pgtype.UUID) error
 	DeleteUser(ctx context.Context, id pgtype.UUID) error
 	GetActiveInterviewCount(ctx context.Context, interviewerID pgtype.UUID) (int64, error)
@@ -60,8 +63,10 @@ type Querier interface {
 	GetCandidateCountsByJob(ctx context.Context) ([]GetCandidateCountsByJobRow, error)
 	GetCandidateHistory(ctx context.Context, dollar_1 pgtype.UUID) ([]GetCandidateHistoryRow, error)
 	GetCandidateHistoryForReviewer(ctx context.Context, arg GetCandidateHistoryForReviewerParams) ([]GetCandidateHistoryForReviewerRow, error)
+	GetCandidateReviewerForRevert(ctx context.Context, candidateID pgtype.UUID) (CandidateReviewer, error)
 	GetCandidateStatus(ctx context.Context, id pgtype.UUID) (CandidateStatus, error)
 	GetCandidateStatusBySlug(ctx context.Context, slug string) (CandidateStatus, error)
+	GetCurrentCandidateReviewer(ctx context.Context, candidateID pgtype.UUID) (CandidateReviewer, error)
 	GetEmployee(ctx context.Context, id pgtype.UUID) (Employee, error)
 	GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (Employee, error)
 	GetInterview(ctx context.Context, id pgtype.UUID) (Interview, error)
@@ -93,6 +98,7 @@ type Querier interface {
 	MarkAllNotificationsAsRead(ctx context.Context, userID pgtype.UUID) error
 	MarkNotificationAsRead(ctx context.Context, arg MarkNotificationAsReadParams) error
 	RefreshToken(ctx context.Context, id pgtype.UUID) (Session, error)
+	RemoveCandidateReviewer(ctx context.Context, candidateID pgtype.UUID) (int64, error)
 	RevokeHRRole(ctx context.Context, id pgtype.UUID) error
 	RevokeInterviewerRole(ctx context.Context, employeeID pgtype.UUID) error
 	RevokeRecruiterRole(ctx context.Context, employeeID pgtype.UUID) error
