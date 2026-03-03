@@ -42,7 +42,7 @@ func NewCandidateService(repo repository.Querier, txBeginner ...TxBeginner) *Can
 	}
 }
 
-func (s *CandidateService) CreateCandidate(ctx context.Context, input model.CandidateInput) (*model.Candidate, error) {
+func (s *CandidateService) CreateCandidate(ctx context.Context, input model.CandidateCreateInput, resumeURL string) (*model.Candidate, error) {
 	jobUUID, err := utils.StringToUUID(input.AppliedJobID)
 	if err != nil {
 		return nil, err
@@ -62,7 +62,7 @@ func (s *CandidateService) CreateCandidate(ctx context.Context, input model.Cand
 		Education:       input.Education,
 		AppliedJobID:    jobUUID,
 		Channel:         input.Channel,
-		ResumeUrl:       input.ResumeURL,
+		ResumeUrl:       resumeURL,
 		Status:          status,
 		AppliedAt:       pgtype.Timestamptz{Time: input.AppliedAt, Valid: true},
 	}
@@ -479,22 +479,6 @@ func (s *CandidateService) UpdateStatus(ctx context.Context, id string, status s
 		_ = s.repo.UpdateCandidateReviewerRemovedAt(ctx, uuid)
 	}
 
-	return s.GetCandidate(ctx, id)
-}
-
-func (s *CandidateService) UpdateResume(ctx context.Context, id string, resumeUrl string) (*model.Candidate, error) {
-	uuid, err := utils.StringToUUID(id)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = s.repo.UpdateCandidateResume(ctx, repository.UpdateCandidateResumeParams{
-		ID:        uuid,
-		ResumeUrl: resumeUrl,
-	})
-	if err != nil {
-		return nil, err
-	}
 	return s.GetCandidate(ctx, id)
 }
 

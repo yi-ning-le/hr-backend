@@ -5,8 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"testing"
 	"time"
 
@@ -419,4 +421,238 @@ func mustScanCandidateHandlerUUID(t *testing.T, raw string) pgtype.UUID {
 		t.Fatalf("failed to scan uuid %s: %v", raw, err)
 	}
 	return id
+}
+
+func TestCreateCandidateHandler_MultipartSuccess(t *testing.T) {
+	// Don't pollute the handler directory with an uploads folder during the test
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("failed to change working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalWD); err != nil {
+			t.Fatalf("failed to restore working directory: %v", err)
+		}
+	}()
+
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		CreateCandidateFunc: func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error) {
+			return repository.Candidate{
+				ID: mustScanCandidateHandlerUUID(t, "00000000-0000-0000-0000-000000000001"),
+			}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID: id,
+			}, nil
+		},
+	}
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates", h.CreateCandidate)
+
+	// Create multipart form data
+	var b bytes.Buffer
+	writer := multipart.NewWriter(&b)
+
+	// Add file
+	fileWriter, err := writer.CreateFormFile("file", "resume.pdf")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := fileWriter.Write([]byte("dummy pdf content")); err != nil {
+		t.Fatalf("failed to write form file: %v", err)
+	}
+
+	// Add data
+	data := map[string]interface{}{
+		"name":            "John Doe",
+		"email":           "johndoe@example.com",
+		"phone":           "1234567890",
+		"experienceYears": 3,
+		"education":       "BSc Computer Science",
+		"appliedJobId":    "00000000-0000-0000-0000-000000000001",
+		"channel":         "LinkedIn",
+		"appliedAt":       time.Now().Format(time.RFC3339),
+	}
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("failed to marshal data: %v", err)
+	}
+	if err := writer.WriteField("data", string(dataBytes)); err != nil {
+		t.Fatalf("failed to write data field: %v", err)
+	}
+
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close writer: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "/candidates", &b)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	// We expect 201 Created
+	if w.Code != http.StatusCreated {
+		t.Errorf("expected 201 Created, got %d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestCreateCandidateHandler_MultipartValidationError(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(t.TempDir()); err != nil {
+		t.Fatalf("failed to change working directory: %v", err)
+	}
+	defer func() {
+		if err := os.Chdir(originalWD); err != nil {
+			t.Fatalf("failed to restore working directory: %v", err)
+		}
+	}()
+
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		CreateCandidateFunc: func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error) {
+			t.Fatalf("CreateCandidate should not be called when validation fails")
+			return repository.Candidate{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates", h.CreateCandidate)
+
+	var b bytes.Buffer
+	writer := multipart.NewWriter(&b)
+
+	fileWriter, err := writer.CreateFormFile("file", "resume.pdf")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := fileWriter.Write([]byte("dummy pdf content")); err != nil {
+		t.Fatalf("failed to write form file: %v", err)
+	}
+
+	// Invalid email should fail model validation.
+	data := map[string]interface{}{
+		"name":            "John Doe",
+		"email":           "invalid-email",
+		"phone":           "1234567890",
+		"experienceYears": 3,
+		"education":       "BSc Computer Science",
+		"appliedJobId":    "00000000-0000-0000-0000-000000000001",
+		"channel":         "LinkedIn",
+		"appliedAt":       time.Now().Format(time.RFC3339),
+	}
+
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("failed to marshal data: %v", err)
+	}
+	if err := writer.WriteField("data", string(dataBytes)); err != nil {
+		t.Fatalf("failed to write data field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close writer: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "/candidates", &b)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 BadRequest, got %d body=%s", w.Code, w.Body.String())
+	}
+
+	files, err := os.ReadDir("uploads")
+	if err != nil {
+		t.Fatalf("failed to read uploads directory: %v", err)
+	}
+	if len(files) != 0 {
+		t.Fatalf("expected uploaded file to be cleaned up, found %d files", len(files))
+	}
+}
+
+func TestCreateCandidateHandler_RejectsNonPDFResume(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	mockRepo := &mocks.MockQuerier{
+		CreateCandidateFunc: func(ctx context.Context, arg repository.CreateCandidateParams) (repository.Candidate, error) {
+			t.Fatalf("CreateCandidate should not be called for unsupported file types")
+			return repository.Candidate{}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	h := handler.NewCandidateHandler(svc)
+
+	r := gin.New()
+	r.POST("/candidates", h.CreateCandidate)
+
+	var b bytes.Buffer
+	writer := multipart.NewWriter(&b)
+
+	fileWriter, err := writer.CreateFormFile("file", "resume.docx")
+	if err != nil {
+		t.Fatalf("failed to create form file: %v", err)
+	}
+	if _, err := fileWriter.Write([]byte("dummy docx content")); err != nil {
+		t.Fatalf("failed to write form file: %v", err)
+	}
+
+	data := map[string]interface{}{
+		"name":            "John Doe",
+		"email":           "john@example.com",
+		"phone":           "1234567890",
+		"experienceYears": 3,
+		"education":       "BSc Computer Science",
+		"appliedJobId":    "00000000-0000-0000-0000-000000000001",
+		"channel":         "LinkedIn",
+		"appliedAt":       time.Now().Format(time.RFC3339),
+	}
+
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		t.Fatalf("failed to marshal data: %v", err)
+	}
+	if err := writer.WriteField("data", string(dataBytes)); err != nil {
+		t.Fatalf("failed to write data field: %v", err)
+	}
+	if err := writer.Close(); err != nil {
+		t.Fatalf("failed to close writer: %v", err)
+	}
+
+	req, err := http.NewRequest("POST", "/candidates", &b)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400 BadRequest, got %d body=%s", w.Code, w.Body.String())
+	}
 }

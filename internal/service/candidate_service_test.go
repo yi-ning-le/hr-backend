@@ -50,7 +50,7 @@ func TestCreateCandidate(t *testing.T) {
 
 	svc := service.NewCandidateService(mockRepo)
 
-	input := model.CandidateInput{
+	input := model.CandidateCreateInput{
 		Name:            "John Doe",
 		Email:           "john@example.com",
 		Phone:           "1234567890",
@@ -58,11 +58,10 @@ func TestCreateCandidate(t *testing.T) {
 		Education:       "BS CS",
 		AppliedJobID:    jobIDStr,
 		Channel:         "LinkedIn",
-		ResumeURL:       "http://example.com/resume.pdf",
 		AppliedAt:       time.Now(),
 	}
 
-	candidate, err := svc.CreateCandidate(context.Background(), input)
+	candidate, err := svc.CreateCandidate(context.Background(), input, "http://example.com/resume.pdf")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}

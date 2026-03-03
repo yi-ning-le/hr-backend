@@ -140,7 +140,6 @@ func NewServer(cfg *config.Config, db *database.Database) *Server {
 		recruiterWrite.PUT("/candidates/:id", candidateHandler.UpdateCandidate)
 		recruiterWrite.DELETE("/candidates/:id", candidateHandler.DeleteCandidate)
 		recruiterWrite.PATCH("/candidates/:id/status", candidateHandler.UpdateStatus)
-		recruiterWrite.POST("/candidates/:id/resume", candidateHandler.UploadResume)
 		recruiterWrite.POST("/candidates/:id/assign-reviewer", candidateHandler.AssignReviewer)
 
 		// Statuses

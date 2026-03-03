@@ -1,8 +1,10 @@
 package handler
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,6 +15,7 @@ import (
 	"hr-backend/internal/service"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gin-gonic/gin/binding"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
@@ -29,6 +32,52 @@ var allowedReviewStatuses = map[string]struct{}{
 
 func NewCandidateHandler(s *service.CandidateService) *CandidateHandler {
 	return &CandidateHandler{service: s}
+}
+
+const (
+	maxResumeUploadSize = 10 << 20
+	resumeUploadDir     = "./uploads"
+	pdfFileExtension    = ".pdf"
+)
+
+func (h *CandidateHandler) saveResumeFile(c *gin.Context, file *multipart.FileHeader) (string, string, error) {
+	if err := os.MkdirAll(resumeUploadDir, 0o755); err != nil {
+		return "", "", err
+	}
+
+	ext := filepath.Ext(file.Filename)
+	filename := uuid.New().String() + ext
+	filePath := filepath.Join(resumeUploadDir, filename)
+
+	if err := c.SaveUploadedFile(file, filePath); err != nil {
+		return "", "", err
+	}
+
+	resumeURL := fmt.Sprintf("/static/resumes/%s", filename)
+	return filePath, resumeURL, nil
+}
+
+func validateResumeFile(file *multipart.FileHeader) error {
+	if file.Size <= 0 {
+		return errors.New("resume file is empty")
+	}
+	if file.Size > maxResumeUploadSize {
+		return fmt.Errorf("resume file exceeds %dMB limit", maxResumeUploadSize>>20)
+	}
+
+	ext := strings.ToLower(filepath.Ext(file.Filename))
+	if ext != pdfFileExtension {
+		return errors.New("only PDF files are supported")
+	}
+
+	contentType := strings.ToLower(file.Header.Get("Content-Type"))
+	if contentType != "" &&
+		contentType != "application/octet-stream" &&
+		!strings.Contains(contentType, "application/pdf") {
+		return errors.New("invalid resume content type")
+	}
+
+	return nil
 }
 
 func (h *CandidateHandler) ListCandidates(c *gin.Context) {
@@ -67,14 +116,52 @@ func (h *CandidateHandler) GetCandidateCounts(c *gin.Context) {
 }
 
 func (h *CandidateHandler) CreateCandidate(c *gin.Context) {
-	var input model.CandidateInput
-	if err := c.ShouldBindJSON(&input); err != nil {
+	// Parse multipart form
+	if err := c.Request.ParseMultipartForm(maxResumeUploadSize); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Failed to parse multipart form"})
+		return
+	}
+
+	// 1. Extract the file
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Resume file is required"})
+		return
+	}
+
+	// 2. Extract the JSON data
+	dataStr := c.PostForm("data")
+	if dataStr == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Candidate data is required"})
+		return
+	}
+
+	var input model.CandidateCreateInput
+	if err := json.Unmarshal([]byte(dataStr), &input); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid candidate data format: %v", err)})
+		return
+	}
+
+	if err := validateResumeFile(file); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	candidate, err := h.service.CreateCandidate(c.Request.Context(), input)
+	filePath, resumeURL, err := h.saveResumeFile(c, file)
 	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save resume file"})
+		return
+	}
+
+	if err := binding.Validator.ValidateStruct(input); err != nil {
+		_ = os.Remove(filePath)
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	candidate, err := h.service.CreateCandidate(c.Request.Context(), input, resumeURL)
+	if err != nil {
+		_ = os.Remove(filePath)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -253,53 +340,4 @@ func (h *CandidateHandler) RevertReviewer(c *gin.Context) {
 		return
 	}
 	c.JSON(http.StatusOK, candidate)
-}
-
-func (h *CandidateHandler) UploadResume(c *gin.Context) {
-	id := c.Param("id")
-	file, err := c.FormFile("file")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "No file is received"})
-		return
-	}
-
-	// Ensure uploads directory exists
-	uploadDir := "./uploads"
-	if _, err := os.Stat(uploadDir); os.IsNotExist(err) {
-		if err := os.Mkdir(uploadDir, 0755); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create upload directory"})
-			return
-		}
-	}
-
-	// Generate filename
-	ext := filepath.Ext(file.Filename)
-	filename := uuid.New().String() + ext
-	filePath := filepath.Join(uploadDir, filename)
-
-	if err := c.SaveUploadedFile(file, filePath); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save file"})
-		return
-	}
-
-	// Create URL (assuming static file serving at /static/resumes)
-	// We need to return the full URL or relative path.
-	// For now, let's return a relative URL that the frontend can prepend the base URL to, or an absolute URL if we knew the host.
-	// We'll use relative: /static/resumes/filename
-	resumeUrl := fmt.Sprintf("/static/resumes/%s", filename)
-
-	// Update candidate resume URL in DB
-	// The OpenAPI spec says this returns { resumeUrl: string, candidate: Candidate }
-	// We need to call service to update the URL
-
-	candidate, err := h.service.UpdateResume(c.Request.Context(), id, resumeUrl)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"resumeUrl": resumeUrl,
-		"candidate": candidate,
-	})
 }

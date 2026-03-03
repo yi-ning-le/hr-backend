@@ -72,7 +72,9 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 ### API Endpoints
 
 - `GET /health` - Health check
-- `GET /api/v1/users` - Get users
+- `POST /candidates` - Create candidate with required resume upload (`multipart/form-data`)
+  - Form field `file`: PDF only, max 10MB
+  - Form field `data`: JSON string for candidate fields (`name`, `email`, `phone`, `experienceYears`, `education`, `appliedJobId`, `channel`, `appliedAt`, etc.)
 
 ## Development
 
