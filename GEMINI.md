@@ -6,7 +6,7 @@ This is a backend service for an HR management system. It is built using **Go** 
 
 ## Tech Stack
 
-- **Language:** Go (1.25.5+)
+- **Language:** Go (1.26+)
 - **Web Framework:** [Gin](https://github.com/gin-gonic/gin)
 - **Database:** PostgreSQL
 - **Driver:** [pgx/v5](https://github.com/jackc/pgx)
@@ -32,7 +32,7 @@ The project follows a standard Go project layout with a separation of concerns:
 
 ### Prerequisites
 
-- Go 1.25+
+- Go 1.26+
 - PostgreSQL running locally or accessible via URL.
 - `sqlc` CLI installed (for generating DB code).
 

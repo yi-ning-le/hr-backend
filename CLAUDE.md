@@ -39,7 +39,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Database Access**: Strictly use `sqlc`.
   1. Modify `migrations/*.sql` for schema changes.
   2. Add/Edit queries in `internal/repository/query/*.sql`.
-  3. Run `sqlc generate`.
+  3. Run `just generate`.
   4. Use generated methods in `internal/repository/`.
   - Do NOT write raw SQL in handlers or services.
 - **Dependency Injection**: Dependencies (DB pool, Repositories, Services) are manually wired in `main.go` and injected into constructors.

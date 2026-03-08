@@ -5,7 +5,7 @@ This file defines the operational context, required skills, and development stan
 ## Project Identity
 
 **Name:** HR Management System - Backend API
-**Stack:** Go 1.25+, Gin, PostgreSQL (pgx), sqlc
+**Stack:** Go 1.26+, Gin, PostgreSQL (pgx), sqlc
 
 ## Skill Matrix
 

@@ -19,7 +19,7 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 │   ├── handler/         # HTTP handlers
 │   ├── middleware/      # HTTP middleware
 │   ├── model/           # Data models and structs
-│   ├── repository/      # Data access layer (sqlc generated)
+│   ├── repository/      # Data access layer (just generated)
 │   │   └── query/       # SQL queries for sqlc
 │   ├── service/         # Business logic
 │   └── utils/           # Utility functions
@@ -37,7 +37,7 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 
 ### Prerequisites
 
-- Go 1.24+
+- Go 1.26+
 - PostgreSQL
 - sqlc CLI (for development)
 
@@ -60,7 +60,7 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 4. Generate code from SQL queries:
 
    ```bash
-   sqlc generate
+   just generate
    ```
 
 5. Run the development server (with hot module replacement):
@@ -88,7 +88,7 @@ A Go backend service for HR management built with **Gin + sqlc + pgx**.
 3. Update SQL queries in `internal/repository/query/`
 4. Generate Go code:
    ```bash
-   sqlc generate
+   just generate
    ```
 
 To re-run a specific migration (drops tables, removes record, re-applies):
@@ -102,11 +102,11 @@ Both `migrate` and `remigrate` commands trigger hot reload if Air is running.
 ### Running Tests
 
 ```bash
-go test ./...
+just test
 ```
 
 ### Building
 
 ```bash
-go build -o bin/hr-backend main.go
+just build
 ```
