@@ -97,6 +97,10 @@ func TestCreateInterview(t *testing.T) {
 
 	h := handler.NewRecruitmentHandler(mockRepo)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "55555555-5555-5555-5555-555555555555")
+		c.Next()
+	})
 	r.POST("/recruitment/interviews", h.CreateInterview)
 
 	input := model.CreateInterviewInput{
@@ -182,6 +186,10 @@ func TestCreateInterview_Reschedule(t *testing.T) {
 
 	h := handler.NewRecruitmentHandler(mockRepo)
 	r := gin.New()
+	r.Use(func(c *gin.Context) {
+		c.Set("userID", "55555555-5555-5555-5555-555555555555")
+		c.Next()
+	})
 	r.POST("/recruitment/interviews", h.CreateInterview)
 
 	// First schedule

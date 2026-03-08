@@ -497,12 +497,13 @@ WITH current_candidate_status AS (
 ),
 inserted_interview AS (
     INSERT INTO interviews (
-      candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id, snapshot_status_key, snapshot_status_label
+      candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
     ) VALUES (
       $1, $2, $3, $4, $5, $6, 
       (SELECT id FROM current_candidate_status),
       (SELECT slug FROM current_candidate_status),
-      (SELECT name FROM current_candidate_status)
+      (SELECT name FROM current_candidate_status),
+      $7
     )
     ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
     DO UPDATE SET
@@ -514,9 +515,9 @@ inserted_interview AS (
       snapshot_status_key = EXCLUDED.snapshot_status_key,
       snapshot_status_label = EXCLUDED.snapshot_status_label,
       updated_at = CURRENT_TIMESTAMP
-    RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label
+    RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
 )
-SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label FROM inserted_interview
+SELECT id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id FROM inserted_interview
 `
 
 type CreateInterviewParams struct {
@@ -526,6 +527,7 @@ type CreateInterviewParams struct {
 	ScheduledTime    pgtype.Timestamptz `json:"scheduled_time"`
 	ScheduledEndTime pgtype.Timestamptz `json:"scheduled_end_time"`
 	Status           string             `json:"status"`
+	CreatedByUserID  pgtype.UUID        `json:"created_by_user_id"`
 }
 
 type CreateInterviewRow struct {
@@ -541,6 +543,7 @@ type CreateInterviewRow struct {
 	CandidateStatusID   pgtype.UUID        `json:"candidate_status_id"`
 	SnapshotStatusKey   string             `json:"snapshot_status_key"`
 	SnapshotStatusLabel string             `json:"snapshot_status_label"`
+	CreatedByUserID     pgtype.UUID        `json:"created_by_user_id"`
 }
 
 // Interview queries
@@ -552,6 +555,7 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		arg.ScheduledTime,
 		arg.ScheduledEndTime,
 		arg.Status,
+		arg.CreatedByUserID,
 	)
 	var i CreateInterviewRow
 	err := row.Scan(
@@ -567,6 +571,7 @@ func (q *Queries) CreateInterview(ctx context.Context, arg CreateInterviewParams
 		&i.CandidateStatusID,
 		&i.SnapshotStatusKey,
 		&i.SnapshotStatusLabel,
+		&i.CreatedByUserID,
 	)
 	return i, err
 }
@@ -1222,7 +1227,7 @@ func (q *Queries) GetEmployeeByUserID(ctx context.Context, userID pgtype.UUID) (
 }
 
 const getInterview = `-- name: GetInterview :one
-SELECT i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label
+SELECT i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label, i.created_by_user_id
 FROM interviews i
 WHERE i.id = $1 LIMIT 1
 `
@@ -1243,6 +1248,7 @@ func (q *Queries) GetInterview(ctx context.Context, id pgtype.UUID) (Interview, 
 		&i.CandidateStatusID,
 		&i.SnapshotStatusKey,
 		&i.SnapshotStatusLabel,
+		&i.CreatedByUserID,
 	)
 	return i, err
 }
@@ -1902,7 +1908,7 @@ func (q *Queries) ListInterviewers(ctx context.Context) ([]ListInterviewersRow, 
 
 const listInterviews = `-- name: ListInterviews :many
 SELECT 
-    i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label, 
+    i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label, i.created_by_user_id, 
     c.name as candidate_name, 
     c.resume_url as candidate_resume_url,
     j.title as job_title,
@@ -1941,6 +1947,7 @@ type ListInterviewsRow struct {
 	CandidateStatusID    pgtype.UUID        `json:"candidate_status_id"`
 	SnapshotStatusKey    string             `json:"snapshot_status_key"`
 	SnapshotStatusLabel  string             `json:"snapshot_status_label"`
+	CreatedByUserID      pgtype.UUID        `json:"created_by_user_id"`
 	CandidateName        string             `json:"candidate_name"`
 	CandidateResumeUrl   string             `json:"candidate_resume_url"`
 	JobTitle             string             `json:"job_title"`
@@ -1976,6 +1983,7 @@ func (q *Queries) ListInterviews(ctx context.Context, arg ListInterviewsParams) 
 			&i.CandidateStatusID,
 			&i.SnapshotStatusKey,
 			&i.SnapshotStatusLabel,
+			&i.CreatedByUserID,
 			&i.CandidateName,
 			&i.CandidateResumeUrl,
 			&i.JobTitle,
@@ -1993,7 +2001,7 @@ func (q *Queries) ListInterviews(ctx context.Context, arg ListInterviewsParams) 
 }
 
 const listInterviewsByInterviewer = `-- name: ListInterviewsByInterviewer :many
-SELECT i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label
+SELECT i.id, i.candidate_id, i.interviewer_id, i.job_id, i.scheduled_time, i.status, i.created_at, i.updated_at, i.scheduled_end_time, i.candidate_status_id, i.snapshot_status_key, i.snapshot_status_label, i.created_by_user_id
 FROM interviews i
 WHERE i.interviewer_id = $1
 ORDER BY i.scheduled_time DESC
@@ -2021,6 +2029,7 @@ func (q *Queries) ListInterviewsByInterviewer(ctx context.Context, interviewerID
 			&i.CandidateStatusID,
 			&i.SnapshotStatusKey,
 			&i.SnapshotStatusLabel,
+			&i.CreatedByUserID,
 		); err != nil {
 			return nil, err
 		}
@@ -2429,7 +2438,7 @@ UPDATE interviews
 SET interviewer_id = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
 `
 
 type TransferInterviewParams struct {
@@ -2453,6 +2462,7 @@ func (q *Queries) TransferInterview(ctx context.Context, arg TransferInterviewPa
 		&i.CandidateStatusID,
 		&i.SnapshotStatusKey,
 		&i.SnapshotStatusLabel,
+		&i.CreatedByUserID,
 	)
 	return i, err
 }
@@ -2760,7 +2770,7 @@ SET scheduled_time = $2,
     interviewer_id = $4,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
 `
 
 type UpdateInterviewParams struct {
@@ -2791,6 +2801,7 @@ func (q *Queries) UpdateInterview(ctx context.Context, arg UpdateInterviewParams
 		&i.CandidateStatusID,
 		&i.SnapshotStatusKey,
 		&i.SnapshotStatusLabel,
+		&i.CreatedByUserID,
 	)
 	return i, err
 }
@@ -2800,7 +2811,7 @@ UPDATE interviews
 SET status = $2,
     updated_at = CURRENT_TIMESTAMP
 WHERE id = $1
-RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label
+RETURNING id, candidate_id, interviewer_id, job_id, scheduled_time, status, created_at, updated_at, scheduled_end_time, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
 `
 
 type UpdateInterviewStatusParams struct {
@@ -2824,6 +2835,7 @@ func (q *Queries) UpdateInterviewStatus(ctx context.Context, arg UpdateInterview
 		&i.CandidateStatusID,
 		&i.SnapshotStatusKey,
 		&i.SnapshotStatusLabel,
+		&i.CreatedByUserID,
 	)
 	return i, err
 }

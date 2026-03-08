@@ -83,6 +83,11 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		return
 	}
 
+	userID, ok := currentUserIDFromContext(c)
+	if !ok {
+		return
+	}
+
 	ctx := c.Request.Context()
 
 	interview, err := h.recruitmentService.CreateInterview(ctx, repository.CreateInterviewParams{
@@ -92,6 +97,7 @@ func (h *RecruitmentHandler) CreateInterview(c *gin.Context) {
 		ScheduledTime:    pgtype.Timestamptz{Time: input.ScheduledTime, Valid: true},
 		ScheduledEndTime: pgtype.Timestamptz{Time: input.ScheduledEndTime, Valid: true},
 		Status:           "PENDING",
+		CreatedByUserID:  userID,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create interview"})
@@ -265,11 +271,15 @@ func (h *RecruitmentHandler) UpdateInterviewStatus(c *gin.Context) {
 		return
 	}
 
-	updatedInterview, err := h.queries.UpdateInterviewStatus(ctx, repository.UpdateInterviewStatusParams{
-		ID:     interviewID,
-		Status: input.Status,
-	})
+	updatedInterview, err := h.recruitmentService.UpdateInterviewStatus(ctx, interviewID, interview, input)
 	if err != nil {
+		if errors.Is(err, service.ErrInterviewResultRequired) ||
+			errors.Is(err, service.ErrInvalidInterviewResult) ||
+			errors.Is(err, service.ErrCancelledInterviewPayload) ||
+			errors.Is(err, service.ErrInvalidInterviewStatusPayload) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update interview status"})
 		return
 	}

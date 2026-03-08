@@ -345,12 +345,13 @@ WITH current_candidate_status AS (
 ),
 inserted_interview AS (
     INSERT INTO interviews (
-      candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id, snapshot_status_key, snapshot_status_label
+      candidate_id, interviewer_id, job_id, scheduled_time, scheduled_end_time, status, candidate_status_id, snapshot_status_key, snapshot_status_label, created_by_user_id
     ) VALUES (
       $1, $2, $3, $4, $5, $6, 
       (SELECT id FROM current_candidate_status),
       (SELECT slug FROM current_candidate_status),
-      (SELECT name FROM current_candidate_status)
+      (SELECT name FROM current_candidate_status),
+      $7
     )
     ON CONFLICT (candidate_id, job_id) WHERE status = 'PENDING'
     DO UPDATE SET

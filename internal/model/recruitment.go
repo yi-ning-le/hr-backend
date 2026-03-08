@@ -33,7 +33,9 @@ type TransferInterviewInput struct {
 
 // UpdateInterviewStatusInput is the request body for updating interview status
 type UpdateInterviewStatusInput struct {
-	Status string `json:"status" binding:"required,oneof=COMPLETED CANCELLED"`
+	Status  string  `json:"status" binding:"required,oneof=COMPLETED CANCELLED"`
+	Result  *string `json:"result,omitempty"`  // PASS or FAIL, required when status is COMPLETED
+	Comment *string `json:"comment,omitempty"` // Optional comment when status is COMPLETED
 }
 
 // HREmployee represents an employee with HR role

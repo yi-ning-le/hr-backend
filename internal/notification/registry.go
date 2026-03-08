@@ -30,6 +30,14 @@ type ReviewCompletedPayload struct {
 	ReviewerName  string `json:"reviewerName"`
 }
 
+type InterviewCompletedPayload struct {
+	InterviewID     string `json:"interviewId"`
+	CandidateID     string `json:"candidateId"`
+	CandidateName   string `json:"candidateName"`
+	InterviewerName string `json:"interviewerName"`
+	InterviewResult string `json:"interviewResult"`
+}
+
 func ValidatePayload(eventType, subjectType string, payload any) error {
 	switch eventType {
 	case model.NotificationEventCandidateReviewerAssigned:
@@ -66,6 +74,21 @@ func ValidatePayload(eventType, subjectType string, payload any) error {
 		p, ok := payload.(ReviewCompletedPayload)
 		if !ok {
 			return fmt.Errorf("%w: review completed payload type mismatch", ErrInvalidContext)
+		}
+		if p.CandidateID == "" {
+			return fmt.Errorf("%w: candidateId is required", ErrInvalidContext)
+		}
+		return nil
+	case model.NotificationEventInterviewCompleted:
+		if subjectType != model.NotificationSubjectTypeInterview {
+			return fmt.Errorf("%w: expected %s got %s", ErrInvalidSubjectType, model.NotificationSubjectTypeInterview, subjectType)
+		}
+		p, ok := payload.(InterviewCompletedPayload)
+		if !ok {
+			return fmt.Errorf("%w: interview completed payload type mismatch", ErrInvalidContext)
+		}
+		if p.InterviewID == "" {
+			return fmt.Errorf("%w: interviewId is required", ErrInvalidContext)
 		}
 		if p.CandidateID == "" {
 			return fmt.Errorf("%w: candidateId is required", ErrInvalidContext)
@@ -127,6 +150,21 @@ func BuildPresentation(eventType, subjectID string, context json.RawMessage) (mo
 		}
 		return content, &model.NotificationAction{
 			Kind:   "reviewFinished",
+			Params: map[string]any{"candidateId": candidateID},
+		}
+	case model.NotificationEventInterviewCompleted:
+		content := model.NotificationContent{
+			TitleKey:   "notifications.events.interview_completed.title",
+			MessageKey: "notifications.events.interview_completed.message",
+			Params:     contextMap,
+		}
+		candidateID := subjectID
+		var payload InterviewCompletedPayload
+		if err := json.Unmarshal(context, &payload); err == nil && payload.CandidateID != "" {
+			candidateID = payload.CandidateID
+		}
+		return content, &model.NotificationAction{
+			Kind:   "interviewCompleted",
 			Params: map[string]any{"candidateId": candidateID},
 		}
 	default:

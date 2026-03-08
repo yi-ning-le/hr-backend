@@ -133,7 +133,7 @@ func normalizeCommentType(commentType string) (string, error) {
 	}
 
 	switch normalized {
-	case "normal", "review_suitable", "review_unsuitable":
+	case "normal", "review_suitable", "review_unsuitable", "interview_pass", "interview_fail":
 		return normalized, nil
 	default:
 		return "", ErrInvalidCommentType

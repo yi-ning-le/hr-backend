@@ -94,6 +94,7 @@ type Interview struct {
 	CandidateStatusID   pgtype.UUID        `json:"candidate_status_id"`
 	SnapshotStatusKey   string             `json:"snapshot_status_key"`
 	SnapshotStatusLabel string             `json:"snapshot_status_label"`
+	CreatedByUserID     pgtype.UUID        `json:"created_by_user_id"`
 }
 
 type Job struct {
