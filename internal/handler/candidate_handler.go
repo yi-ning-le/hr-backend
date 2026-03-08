@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"mime/multipart"
 	"net/http"
 	"os"
@@ -38,6 +39,7 @@ const (
 	maxResumeUploadSize = 10 << 20
 	resumeUploadDir     = "./uploads"
 	pdfFileExtension    = ".pdf"
+	resumeURLPrefix     = "/static/resumes/"
 )
 
 func (h *CandidateHandler) saveResumeFile(c *gin.Context, file *multipart.FileHeader) (string, string, error) {
@@ -77,6 +79,36 @@ func validateResumeFile(file *multipart.FileHeader) error {
 		return errors.New("invalid resume content type")
 	}
 
+	return nil
+}
+
+func localResumeFilePathFromURL(resumeURL string) (string, bool) {
+	if !strings.HasPrefix(resumeURL, resumeURLPrefix) {
+		return "", false
+	}
+
+	filename := strings.TrimPrefix(resumeURL, resumeURLPrefix)
+	if filename == "" || strings.Contains(filename, "\\") {
+		return "", false
+	}
+
+	cleanFilename := filepath.Clean(filename)
+	if cleanFilename != filename || strings.Contains(cleanFilename, "/") || cleanFilename == "." {
+		return "", false
+	}
+
+	return filepath.Join(resumeUploadDir, cleanFilename), true
+}
+
+func removeLocalResumeFileByURL(resumeURL string) error {
+	filePath, ok := localResumeFilePathFromURL(resumeURL)
+	if !ok {
+		return nil
+	}
+
+	if err := os.Remove(filePath); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	return nil
 }
 
@@ -339,5 +371,51 @@ func (h *CandidateHandler) RevertReviewer(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	c.JSON(http.StatusOK, candidate)
+}
+
+func (h *CandidateHandler) UpdateResume(c *gin.Context) {
+	id := c.Param("id")
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Resume file is required"})
+		return
+	}
+
+	if err := validateResumeFile(file); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	filePath, resumeURL, err := h.saveResumeFile(c, file)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to save resume file"})
+		return
+	}
+
+	candidate, oldResumeURL, err := h.service.UpdateCandidateResume(c.Request.Context(), id, resumeURL)
+	if err != nil {
+		if removeErr := os.Remove(filePath); removeErr != nil && !errors.Is(removeErr, os.ErrNotExist) {
+			log.Printf("warn: failed to rollback uploaded resume path=%s err=%v", filePath, removeErr)
+		}
+		if errors.Is(err, service.ErrInvalidCandidateID) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid candidate ID"})
+			return
+		}
+		if errors.Is(err, service.ErrCandidateNotFound) || errors.Is(err, pgx.ErrNoRows) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Candidate not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+
+	if oldResumeURL != "" && oldResumeURL != resumeURL {
+		if err := removeLocalResumeFileByURL(oldResumeURL); err != nil {
+			log.Printf("warn: failed to remove old resume url=%s err=%v", oldResumeURL, err)
+		}
+	}
+
 	c.JSON(http.StatusOK, candidate)
 }

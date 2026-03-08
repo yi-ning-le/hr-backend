@@ -540,6 +540,62 @@ func (s *CandidateService) RevertReviewer(ctx context.Context, id string) (*mode
 	return s.GetCandidate(ctx, id)
 }
 
+func (s *CandidateService) UpdateCandidateResume(ctx context.Context, id string, resumeURL string) (*model.Candidate, string, error) {
+	uuid, err := utils.StringToUUID(id)
+	if err != nil {
+		return nil, "", ErrInvalidCandidateID
+	}
+
+	oldResumeURL := ""
+	existingCandidate, err := s.repo.GetCandidate(ctx, uuid)
+	if err == nil {
+		oldResumeURL = existingCandidate.ResumeUrl
+	} else if !errors.Is(err, pgx.ErrNoRows) {
+		return nil, "", err
+	}
+
+	params := repository.UpdateCandidateResumeParams{
+		ID:        uuid,
+		ResumeUrl: resumeURL,
+	}
+
+	updatedCandidate, err := s.repo.UpdateCandidateResume(ctx, params)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, "", ErrCandidateNotFound
+		}
+		return nil, "", err
+	}
+
+	candidate, err := s.GetCandidate(ctx, id)
+	if err != nil {
+		// Fallback to updated row when joined read fails after successful update.
+		if errors.Is(err, pgx.ErrNoRows) {
+			return &model.Candidate{
+				ID:              utils.UUIDToString(updatedCandidate.ID),
+				Name:            updatedCandidate.Name,
+				Avatar:          updatedCandidate.Avatar.String,
+				Email:           updatedCandidate.Email,
+				Phone:           updatedCandidate.Phone,
+				ExperienceYears: int(updatedCandidate.ExperienceYears),
+				Education:       updatedCandidate.Education,
+				AppliedJobID:    utils.UUIDToString(updatedCandidate.AppliedJobID),
+				AppliedJobTitle: "",
+				Channel:         updatedCandidate.Channel,
+				ResumeURL:       updatedCandidate.ResumeUrl,
+				Status:          updatedCandidate.Status,
+				AppliedAt:       updatedCandidate.AppliedAt.Time,
+				ReviewerID:      utils.UUIDToString(updatedCandidate.ReviewerID),
+				ReviewerName:    "",
+				ReviewStatus:    updatedCandidate.ReviewStatus.String,
+			}, oldResumeURL, nil
+		}
+		return nil, "", err
+	}
+
+	return candidate, oldResumeURL, nil
+}
+
 func (s *CandidateService) DeleteCandidate(ctx context.Context, id string) error {
 	uuid, err := utils.StringToUUID(id)
 	if err != nil {

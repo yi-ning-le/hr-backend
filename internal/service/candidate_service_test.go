@@ -660,3 +660,128 @@ func mustScanUUID(t *testing.T, raw string) pgtype.UUID {
 	}
 	return id
 }
+
+func TestUpdateCandidateResume_Success(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	candidateID := mustScanUUID(t, candidateIDStr)
+	oldResumeURL := "/static/resumes/old-file.pdf"
+	newResumeURL := "/static/resumes/new-file.pdf"
+
+	updateCalled := false
+	getCandidateCalls := 0
+	mockRepo := &mocks.MockQuerier{
+		UpdateCandidateResumeFunc: func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error) {
+			updateCalled = true
+			assert.Equal(t, candidateID, arg.ID)
+			assert.Equal(t, newResumeURL, arg.ResumeUrl)
+			return repository.Candidate{ID: candidateID}, nil
+		},
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			getCandidateCalls++
+			resumeURL := oldResumeURL
+			if getCandidateCalls > 1 {
+				resumeURL = newResumeURL
+			}
+			return repository.GetCandidateRow{
+				ID:              candidateID,
+				Name:            "John Doe",
+				ResumeUrl:       resumeURL,
+				AppliedJobTitle: "Software Engineer",
+			}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	candidate, gotOldResumeURL, err := svc.UpdateCandidateResume(context.Background(), candidateIDStr, newResumeURL)
+	assert.NoError(t, err)
+	assert.True(t, updateCalled)
+	assert.Equal(t, candidateIDStr, candidate.ID)
+	assert.Equal(t, newResumeURL, candidate.ResumeURL)
+	assert.Equal(t, oldResumeURL, gotOldResumeURL)
+}
+
+func TestUpdateCandidateResume_InvalidID_ReturnsError(t *testing.T) {
+	svc := service.NewCandidateService(&mocks.MockQuerier{})
+	_, _, err := svc.UpdateCandidateResume(context.Background(), "invalid-id", "/static/resumes/test.pdf")
+	assert.ErrorIs(t, err, service.ErrInvalidCandidateID)
+}
+
+func TestUpdateCandidateResume_CandidateNotFound_ReturnsError(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	candidateID := mustScanUUID(t, candidateIDStr)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			assert.Equal(t, candidateID, id)
+			return repository.GetCandidateRow{}, pgx.ErrNoRows
+		},
+		UpdateCandidateResumeFunc: func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error) {
+			assert.Equal(t, candidateID, arg.ID)
+			return repository.Candidate{}, pgx.ErrNoRows
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, _, err := svc.UpdateCandidateResume(context.Background(), candidateIDStr, "/static/resumes/test.pdf")
+	assert.ErrorIs(t, err, service.ErrCandidateNotFound)
+}
+
+func TestUpdateCandidateResume_UpdateNoRows_ReturnsError(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	candidateID := mustScanUUID(t, candidateIDStr)
+
+	mockRepo := &mocks.MockQuerier{
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			return repository.GetCandidateRow{
+				ID:        candidateID,
+				Name:      "John Doe",
+				ResumeUrl: "/static/resumes/old-file.pdf",
+			}, nil
+		},
+		UpdateCandidateResumeFunc: func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error) {
+			return repository.Candidate{}, pgx.ErrNoRows
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	_, _, err := svc.UpdateCandidateResume(context.Background(), candidateIDStr, "/static/resumes/new-file.pdf")
+	assert.ErrorIs(t, err, service.ErrCandidateNotFound)
+}
+
+func TestUpdateCandidateResume_GetCandidateNoRowsFallbackAfterUpdate(t *testing.T) {
+	candidateIDStr := "00000000-0000-0000-0000-000000000001"
+	candidateID := mustScanUUID(t, candidateIDStr)
+	newResumeURL := "/static/resumes/new-file.pdf"
+	getCandidateCalls := 0
+
+	mockRepo := &mocks.MockQuerier{
+		GetCandidateFunc: func(ctx context.Context, id pgtype.UUID) (repository.GetCandidateRow, error) {
+			getCandidateCalls++
+			return repository.GetCandidateRow{}, pgx.ErrNoRows
+		},
+		UpdateCandidateResumeFunc: func(ctx context.Context, arg repository.UpdateCandidateResumeParams) (repository.Candidate, error) {
+			return repository.Candidate{
+				ID:              candidateID,
+				Name:            "John Doe",
+				Email:           "john@example.com",
+				Phone:           "1234567890",
+				ExperienceYears: 3,
+				Education:       "BS",
+				AppliedJobID:    mustScanUUID(t, "02020202-0202-0202-0202-020202020202"),
+				Channel:         "LinkedIn",
+				ResumeUrl:       newResumeURL,
+				Status:          "new",
+				AppliedAt:       pgtype.Timestamptz{Time: time.Now(), Valid: true},
+				ReviewStatus:    pgtype.Text{String: "pending", Valid: true},
+			}, nil
+		},
+	}
+
+	svc := service.NewCandidateService(mockRepo)
+	candidate, oldResumeURL, err := svc.UpdateCandidateResume(context.Background(), candidateIDStr, newResumeURL)
+	assert.NoError(t, err)
+	assert.Equal(t, "", oldResumeURL)
+	assert.Equal(t, candidateIDStr, candidate.ID)
+	assert.Equal(t, newResumeURL, candidate.ResumeURL)
+	assert.Equal(t, 2, getCandidateCalls)
+}
