@@ -22,6 +22,11 @@ jobs:
       - name: Set up Just
         uses: extractions/setup-just@v2
 
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
+
       - name: Get dependencies
         run: go mod download
 
