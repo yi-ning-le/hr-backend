@@ -1,0 +1,39 @@
+name: Backend CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: hr-backend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Set up Just
+        uses: extractions/setup-just@v2
+
+      - name: Get dependencies
+        run: go mod download
+
+      - name: Run lint
+        run: just lint
+
+      - name: Run tests
+        run: just test
+
+      - name: Build
+        run: just build
